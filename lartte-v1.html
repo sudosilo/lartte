@@ -145,7 +145,8 @@ details[open] summary::after{content:"\25B4"}
       <img class="snap" id="resImg" alt="">
       <div class="score" id="resScore"></div>
       <div class="grade" id="resGrade"></div>
-      <div class="btns"><button data-close="resultModal">Keep pouring</button><button class="primary" id="resFresh">Fresh cup</button></div>
+      <div class="btns" style="margin-bottom:8px"><button class="primary" id="resSave">Save image to phone</button></div>
+      <div class="btns"><button data-close="resultModal">Keep pouring</button><button id="resFresh">Fresh cup</button></div>
     </div>
   </div>
 </div>
@@ -516,8 +517,30 @@ function grade(sc){
   if(sc>=20)return "Abstract art";
   return "Puddle";
 }
+let lastShot=null;
+function grabShot(){
+  draw();
+  const c=document.createElement("canvas");c.width=cv.width;c.height=cv.height;
+  const g=c.getContext("2d");g.fillStyle="#f7f3ec";g.fillRect(0,0,c.width,c.height);g.drawImage(cv,0,0);
+  return c;
+}
+function saveImage(){
+  const c=lastShot||grabShot();
+  const name="lartte-pour-"+new Date().toISOString().slice(0,19).replace(/[:T]/g,"-")+".png";
+  c.toBlob(async b=>{
+    if(!b)return;
+    try{
+      const file=new File([b],name,{type:"image/png"});
+      if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:"lARTte pour"});return;}
+    }catch(e){if(e&&e.name==="AbortError")return;}
+    const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=name;
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  },"image/png");
+}
 function finish(){
   renderLiquid();
+  const gs=settings.ghost;settings.ghost=false;lastShot=grabShot();settings.ghost=gs;
   const t=curTarget(), m=curMode(), snap=snapshot();
   let entry;
   if(t.f){
@@ -612,6 +635,7 @@ const gh=document.getElementById("ghost");gh.checked=settings.ghost;
 gh.onchange=()=>{settings.ghost=gh.checked;saveSettings();};
 document.getElementById("clearBtn").onclick=()=>{stopDemo();freshCup();};
 document.getElementById("finishBtn").onclick=()=>{stopDemo();finish();};
+document.getElementById("resSave").onclick=saveImage;
 document.getElementById("resFresh").onclick=()=>{freshCup();closeModal("resultModal");};
 document.getElementById("logBtn").onclick=()=>{renderLog();openModal("logModal");};
 document.getElementById("menuLog").onclick=()=>{closeMenu();renderLog();openModal("logModal");};
