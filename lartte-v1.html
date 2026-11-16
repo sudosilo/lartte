@@ -14,7 +14,9 @@ header{height:58px;flex:0 0 58px;display:flex;align-items:center;gap:10px;paddin
 .ham span{display:block;width:22px;height:3px;background:var(--blue);border-radius:2px}
 h1{font-size:23px;margin:0;letter-spacing:.5px;font-weight:800}
 h1 b{color:var(--blue)}
-#chip{margin-left:auto;font-size:13px;font-weight:600;background:var(--blue2);color:var(--blue);padding:7px 11px;border-radius:20px;white-space:nowrap;max-width:46%;overflow:hidden;text-overflow:ellipsis;border:none}
+#chip{margin-left:auto;font-size:13px;font-weight:600;background:var(--blue2);color:var(--blue);padding:7px 11px;border-radius:20px;white-space:nowrap;max-width:34%;overflow:hidden;text-overflow:ellipsis;border:none}
+#demoBtn{flex:0 0 66px;width:66px;height:38px;border-radius:19px;border:2px solid var(--blue);background:#fff;color:var(--blue);font-weight:800;font-size:14px;padding:0}
+#demoBtn.on{background:var(--blue);color:#fff}
 #stage{flex:1 1 auto;display:flex;align-items:center;justify-content:center;min-height:0;position:relative}
 #cv{touch-action:none;display:block}
 #status{height:24px;flex:0 0 24px;line-height:24px;text-align:center;font-size:13px;color:var(--soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 10px}
@@ -74,6 +76,7 @@ details[open] summary::after{content:"\25B4"}
     <button class="ham" id="hamBtn" aria-label="Menu"><span></span><span></span><span></span></button>
     <h1>l<b>ART</b>te</h1>
     <button id="chip">Free pour</button>
+    <button id="demoBtn">Demo</button>
   </header>
   <div id="stage"><canvas id="cv"></canvas></div>
   <div id="status">Pick a tool and pour</div>
@@ -161,6 +164,7 @@ const N=128, W2=N+2, S=W2*W2;
 const IX=(i,j)=>i+W2*j;
 let u=new Float32Array(S), v=new Float32Array(S), u0=new Float32Array(S), v0=new Float32Array(S);
 let d=new Float32Array(S), d0=new Float32Array(S);
+const su=new Float32Array(S), sv=new Float32Array(S), ua=new Float32Array(S), va=new Float32Array(S);
 const p=new Float32Array(S), dv=new Float32Array(S);
 const mask=new Uint8Array(S), noise=new Float32Array(S), tgt=new Uint8Array(S);
 const C=(N+1)/2, HALF=N/2;
@@ -228,8 +232,10 @@ function step(){
   advect(2,v,v0,u0,v0);
   project();
   d0.set(d);
-  advect(0,d,d0,u,v);
-  const damp=0.995-settings.drag*0.04;
+  for(let q=0;q<S;q++){ua[q]=u[q]+su[q];va[q]=v[q]+sv[q];}
+  advect(0,d,d0,ua,va);
+  su.fill(0);sv.fill(0);
+  const damp=0.988-settings.drag*0.06;
   for(let q=0;q<S;q++){u[q]*=damp;v[q]*=damp;}
   for(let n=0;n<outside.length;n++)d[outside[n]]=0;
 }
@@ -354,6 +360,7 @@ function toGrid(e){
 }
 cv.addEventListener("pointerdown",e=>{
   e.preventDefault();
+  if(demo.on)stopDemo();
   if(ptr.down)return;
   cv.setPointerCapture(e.pointerId);
   const g=toGrid(e);
@@ -376,31 +383,45 @@ function splat(gx,gy,rad,dye,fvx,fvy,radial){
     const dx=i-gx, dy=j-gy, dist=Math.sqrt(dx*dx+dy*dy);
     if(dist>=rad)continue;
     const f=1-dist/rad;
-    if(dye){d[k]+=dye*f;if(d[k]>1)d[k]=1;}
+    if(dye){let fd=f*2.5;if(fd>1)fd=1;d[k]+=dye*fd;if(d[k]>1)d[k]=1;}
     u[k]+=fvx*f; v[k]+=fvy*f;
-    if(radial&&dist>0.01){u[k]+=dx/dist*radial*f;v[k]+=dy/dist*radial*f;}
+  }
+  if(radial)source(gx,gy,radial);
+}
+/* point source: poured liquid pushes the surface outward, area grows at a steady rate */
+function source(gx,gy,Q){
+  const R2=46, sc=1/(DT*N);
+  const i0=Math.max(1,Math.floor(gx-R2)), i1=Math.min(N,Math.ceil(gx+R2));
+  const j0=Math.max(1,Math.floor(gy-R2)), j1=Math.min(N,Math.ceil(gy+R2));
+  for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){
+    const k=IX(i,j); if(!mask[k])continue;
+    const dx=i-gx, dy=j-gy; let r2=dx*dx+dy*dy;
+    if(r2>R2*R2)continue;
+    if(r2<1)r2=1;
+    const fall=1-Math.sqrt(r2)/R2;
+    su[k]+=Q*dx/r2*sc*fall; sv[k]+=Q*dy/r2*sc*fall;
   }
 }
-function dropDot(gx,gy){splat(gx,gy,2.2+settings.flow*2.5,1,0,0,0.012);}
+function dropDot(gx,gy){splat(gx,gy,2.2+settings.flow*2.5,1,0,0,0.6+settings.flow);}
 
-function inject(){
+function inject(ptr,tool,fl){
   const vx=ptr.gx-ptr.px, vy=ptr.gy-ptr.py;
   ptr.vx=ptr.vx*0.6+vx*0.4; ptr.vy=ptr.vy*0.6+vy*0.4;
   const sp=Math.hypot(ptr.vx,ptr.vy);
   if(sp>0.25){ptr.dirx=ptr.vx/sp;ptr.diry=ptr.vy/sp;}
-  const k=1/(DT*N), fl=settings.flow;
-  if(settings.tool==="pour"){
-    splat(ptr.gx,ptr.gy,2+fl*5,0.25+fl*0.35,ptr.vx*k*0.9,ptr.vy*k*0.9,(0.01+settings.spread*0.07)*fl);
-  }else if(settings.tool==="wiggle"){
-    phase+=0.55;
-    const amp=1+settings.wamp*4.5, px=-ptr.diry, py=ptr.dirx;
+  const k=1/(DT*N);
+  if(tool==="pour"){
+    splat(ptr.gx,ptr.gy,2+fl*4,0.3+fl*0.4,ptr.vx*k*0.9,ptr.vy*k*0.9,5*fl*(0.4+settings.spread));
+  }else if(tool==="wiggle"){
+    phase+=0.32;
+    const amp=1.5+settings.wamp*8, px=-ptr.diry, py=ptr.dirx;
     const s=Math.sin(phase), c=Math.cos(phase);
     const wx=ptr.gx+px*s*amp, wy=ptr.gy+py*s*amp;
     const wv=c*amp*0.55*k;
-    splat(wx,wy,2+fl*4,0.25+fl*0.35,ptr.vx*k*0.9+px*wv,ptr.vy*k*0.9+py*wv,(0.005+settings.spread*0.04)*fl);
-  }else if(settings.tool==="stick"){
-    if(sp>0.02)splat(ptr.gx,ptr.gy,2.4,0,ptr.vx*k*1.6,ptr.vy*k*1.6,0);
-  }else if(settings.tool==="dot"){
+    splat(wx,wy,2+fl*3,0.3+fl*0.4,ptr.vx*k*0.9+px*wv,ptr.vy*k*0.9+py*wv,1.1*fl*(0.4+settings.spread));
+  }else if(tool==="stick"){
+    if(sp>0.02)splat(ptr.gx,ptr.gy,2.2,0,ptr.vx*k*0.75,ptr.vy*k*0.75,0);
+  }else if(tool==="dot"){
     if(ptr.lastDot){
       const dd=Math.hypot(ptr.gx-ptr.lastDot.x,ptr.gy-ptr.lastDot.y);
       if(dd>5+fl*5){dropDot(ptr.gx,ptr.gy);ptr.lastDot={x:ptr.gx,y:ptr.gy};}
@@ -409,8 +430,55 @@ function inject(){
   ptr.px=ptr.gx;ptr.py=ptr.gy;
 }
 
+/* demo mode: scripted pours that build the design by themselves */
+const DEMOS={
+  monk:[{t:"wait",n:12},{t:"pour",flow:0.95,a:[0,0.04],b:[0,0.04],n:95},{t:"wait",n:30}],
+  heart:[{t:"wait",n:12},{t:"pour",flow:1,a:[0,-0.1],b:[0,-0.04],n:120},{t:"pour",flow:0.8,a:[0,-0.04],b:[0,0.18],n:26},{t:"wait",n:16},{t:"stick",a:[0,-0.62],b:[0,0.66],n:34},{t:"wait",n:30}],
+  tulip:[{t:"wait",n:12},{t:"pour",flow:0.95,a:[0,0.34],b:[0,0.4],n:46},{t:"wait",n:8},{t:"pour",flow:0.85,a:[0,0.0],b:[0,0.07],n:34},{t:"wait",n:8},{t:"pour",flow:0.7,a:[0,-0.3],b:[0,-0.25],n:24},{t:"wait",n:8},{t:"pour",flow:0.45,a:[0,-0.52],b:[0,-0.5],n:12},{t:"wait",n:14},{t:"stick",a:[0,-0.66],b:[0,0.66],n:34},{t:"wait",n:30}],
+  rosetta:[{t:"wait",n:12},{t:"wiggle",flow:0.95,amp:0.45,a:[0,0.580],b:[0,0.530],n:15},{t:"wait",n:3},{t:"wiggle",flow:0.91,amp:0.45,a:[0,0.480],b:[0,0.430],n:14},{t:"wait",n:3},{t:"wiggle",flow:0.88,amp:0.45,a:[0,0.380],b:[0,0.330],n:13},{t:"wait",n:3},{t:"wiggle",flow:0.84,amp:0.45,a:[0,0.280],b:[0,0.230],n:13},{t:"wait",n:3},{t:"wiggle",flow:0.81,amp:0.45,a:[0,0.180],b:[0,0.130],n:12},{t:"wait",n:3},{t:"wiggle",flow:0.77,amp:0.45,a:[0,0.080],b:[0,0.030],n:12},{t:"wait",n:3},{t:"wiggle",flow:0.74,amp:0.45,a:[0,-0.020],b:[0,-0.070],n:11},{t:"wait",n:3},{t:"wiggle",flow:0.70,amp:0.45,a:[0,-0.120],b:[0,-0.170],n:11},{t:"wait",n:3},{t:"wiggle",flow:0.67,amp:0.45,a:[0,-0.220],b:[0,-0.270],n:10},{t:"wait",n:3},{t:"wiggle",flow:0.63,amp:0.45,a:[0,-0.320],b:[0,-0.370],n:10},{t:"wait",n:3},{t:"wiggle",flow:0.60,amp:0.45,a:[0,-0.420],b:[0,-0.470],n:9},{t:"wait",n:3},{t:"wiggle",flow:0.56,amp:0.45,a:[0,-0.520],b:[0,-0.570],n:8},{t:"wait",n:3},{t:"wiggle",flow:0.53,amp:0.45,a:[0,-0.620],b:[0,-0.670],n:8},{t:"wait",n:3},{t:"wait",n:10},{t:"stick",a:[0,-0.72],b:[0,0.78],n:36},{t:"wait",n:30}],
+  dots:[{t:"wait",n:12},{t:"pour",flow:0.5,a:[0,-0.5],b:[0,-0.5],n:12},{t:"wait",n:6},{t:"pour",flow:0.55,a:[0,-0.25],b:[0,-0.25],n:16},{t:"wait",n:6},{t:"pour",flow:0.6,a:[0,0],b:[0,0],n:20},{t:"wait",n:6},{t:"pour",flow:0.65,a:[0,0.25],b:[0,0.25],n:25},{t:"wait",n:6},{t:"pour",flow:0.7,a:[0,0.5],b:[0,0.5],n:30},{t:"wait",n:18},{t:"stick",a:[0,-0.66],b:[0,0.66],n:40},{t:"wait",n:30}]
+};
+DEMOS.free=DEMOS.heart;
+const demo={on:false,segs:null,i:0,f:0,ptr:{down:false,gx:0,gy:0,px:0,py:0,vx:0,vy:0,dirx:1,diry:0,lastDot:null}};
+const demoBtn=document.getElementById("demoBtn");
+const toG=n=>C+n*HALF;
+function startDemo(){
+  freshCup();closeModal("resultModal");
+  demo.segs=DEMOS[settings.target]||DEMOS.heart;demo.i=0;demo.f=0;demo.on=true;phase=0;
+  demoBtn.textContent="Stop";demoBtn.classList.add("on");
+  document.getElementById("status").textContent="Demo pouring "+curTarget().name.toLowerCase();
+}
+function stopDemo(msg){
+  if(!demo.on)return;
+  demo.on=false;demo.ptr.down=false;
+  demoBtn.textContent="Demo";demoBtn.classList.remove("on");
+  if(msg)document.getElementById("status").textContent=msg;else updateStatus();
+}
+function demoTick(){
+  const sg=demo.segs[demo.i];
+  if(!sg){stopDemo("Demo done · tap Fresh cup and try it yourself");return;}
+  const dp=demo.ptr;
+  if(sg.t==="wait"){dp.down=false;}
+  else if(sg.t==="dot"){
+    splat(toG(sg.at[0]),toG(sg.at[1]),sg.r*HALF*0.9,1,0,0,sg.r*14);
+    demo.i++;demo.f=0;return;
+  }else{
+    const tt=sg.n>1?demo.f/(sg.n-1):1;
+    const gx=toG(sg.a[0]+(sg.b[0]-sg.a[0])*tt), gy=toG(sg.a[1]+(sg.b[1]-sg.a[1])*tt);
+    if(demo.f===0){const ddx=sg.b[0]-sg.a[0],ddy=sg.b[1]-sg.a[1],dl=Math.hypot(ddx,ddy);Object.assign(dp,{gx,gy,px:gx,py:gy,vx:0,vy:0,dirx:dl?ddx/dl:1,diry:dl?ddy/dl:0});if(sg.t!=="wiggle")phase=0;}
+    dp.gx=gx;dp.gy=gy;dp.down=true;
+    const keepW=settings.wamp;if(sg.amp!=null)settings.wamp=sg.amp;
+    inject(dp,sg.t,sg.flow!=null?sg.flow:0.5);
+    settings.wamp=keepW;
+  }
+  demo.f++;
+  if(demo.f>=(sg.n||1)){demo.i++;demo.f=0;}
+}
+demoBtn.onclick=()=>{if(demo.on)stopDemo();else startDemo();};
+
 function loop(){
-  if(ptr.down)inject();
+  if(demo.on)demoTick();
+  else if(ptr.down)inject(ptr,settings.tool,settings.flow);
   step();
   draw();
   requestAnimationFrame(loop);
@@ -521,7 +589,7 @@ function buildMenus(){
   const ml=document.getElementById("modeList");ml.innerHTML="";
   MODES.forEach(m=>{
     const b=document.createElement("button");b.className="opt"+(m.id===settings.mode?" on":"");b.textContent=m.name;
-    b.onclick=()=>{if(settings.mode!==m.id){settings.mode=m.id;freshCup();saveSettings();buildMenus();updateStatus();}};
+    b.onclick=()=>{if(settings.mode!==m.id){stopDemo();settings.mode=m.id;freshCup();saveSettings();buildMenus();updateStatus();}};
     ml.appendChild(b);
   });
   const tl=document.getElementById("targetList");tl.innerHTML="";
@@ -542,8 +610,8 @@ function bindRange(id,key){
 bindRange("flow","flow");bindRange("spread","spread");bindRange("drag","drag");bindRange("wamp","wamp");
 const gh=document.getElementById("ghost");gh.checked=settings.ghost;
 gh.onchange=()=>{settings.ghost=gh.checked;saveSettings();};
-document.getElementById("clearBtn").onclick=freshCup;
-document.getElementById("finishBtn").onclick=finish;
+document.getElementById("clearBtn").onclick=()=>{stopDemo();freshCup();};
+document.getElementById("finishBtn").onclick=()=>{stopDemo();finish();};
 document.getElementById("resFresh").onclick=()=>{freshCup();closeModal("resultModal");};
 document.getElementById("logBtn").onclick=()=>{renderLog();openModal("logModal");};
 document.getElementById("menuLog").onclick=()=>{closeMenu();renderLog();openModal("logModal");};
