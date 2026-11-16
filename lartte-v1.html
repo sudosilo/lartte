@@ -113,6 +113,22 @@ details[open] summary::after{content:"\25B4"}
       <div class="lbl"><span>Wiggle size</span><input id="wamp" type="range" min="10" max="100" value="50"></div>
     </div>
   </details>
+  <details open>
+    <summary>Art generator</summary>
+    <div class="sect">
+      <button class="opt on" id="genBtn">Generate art</button>
+      <label class="tog"><input type="checkbox" id="autoArt"> Gallery mode, keeps pouring new art</label>
+      <div id="artName" style="color:var(--soft);margin-top:6px">Each one is poured live with the same milk physics you use.</div>
+    </div>
+  </details>
+  <details>
+    <summary>Symmetry and cup spin</summary>
+    <div class="sect">
+      <div id="symList"></div>
+      <div class="lbl"><span>Cup spin</span><input id="spin" type="range" min="0" max="100" value="50"></div>
+      <div style="color:var(--soft)">Middle is still. Slide left or right to spin the cup while you pour.</div>
+    </div>
+  </details>
   <details>
     <summary>Display</summary>
     <div class="sect">
@@ -176,6 +192,7 @@ for(let j=1;j<=N;j++)for(let i=1;i<=N;i++){
   noise[k]=Math.random();
 }
 const DT=0.1, ITER=16;
+let pouringNow=false;
 
 function setBnd(b,x){
   for(let i=1;i<=N;i++){
@@ -234,6 +251,11 @@ function step(){
   project();
   d0.set(d);
   for(let q=0;q<S;q++){ua[q]=u[q]+su[q];va[q]=v[q]+sv[q];}
+  const spn=curSpin();
+  if(pouringNow&&Math.abs(spn)>0.04){
+    const w=spn*0.0018;
+    for(let j=1;j<=N;j++)for(let i=1;i<=N;i++){const q=IX(i,j);if(!mask[q])continue;ua[q]+=-w*(j-C);va[q]+=w*(i-C);}
+  }
   advect(0,d,d0,ua,va);
   su.fill(0);sv.fill(0);
   const damp=0.988-settings.drag*0.06;
@@ -262,7 +284,7 @@ const MODES=[
   {id:"esp",name:"Espresso on cream",base:[246,234,212],edge:[226,204,170],top:[96,54,28],topName:"espresso"},
   {id:"milk",name:"Milk on espresso",base:[164,102,52],edge:[110,62,28],top:[251,246,236],topName:"milk"}
 ];
-const settings={tool:"pour",flow:0.55,spread:0.45,drag:0.4,wamp:0.5,ghost:true,target:"free",mode:"esp"};
+const settings={tool:"pour",flow:0.55,spread:0.45,drag:0.4,wamp:0.5,ghost:true,target:"free",mode:"esp",sym:"off",spin:0.5,autoArt:false};
 try{const sv=JSON.parse(localStorage.getItem("lartte-settings-v1")||"null");if(sv)Object.assign(settings,sv);}catch(e){}
 function saveSettings(){try{localStorage.setItem("lartte-settings-v1",JSON.stringify(settings));}catch(e){}}
 function curTarget(){return TARGETS.find(t=>t.id===settings.target)||TARGETS[0];}
@@ -361,6 +383,7 @@ function toGrid(e){
 }
 cv.addEventListener("pointerdown",e=>{
   e.preventDefault();
+  clearTimeout(autoTimer);
   if(demo.on)stopDemo();
   if(ptr.down)return;
   cv.setPointerCapture(e.pointerId);
@@ -376,7 +399,31 @@ cv.addEventListener("pointermove",e=>{
 function up(e){if(e.pointerId===ptr.id){ptr.down=false;ptr.id=null;}}
 cv.addEventListener("pointerup",up);cv.addEventListener("pointercancel",up);
 
+const SYMS=[
+  {id:"off",name:"Off",n:1,m:false},
+  {id:"mirror",name:"Mirror",n:1,m:true},
+  {id:"spin3",name:"Spin three",n:3,m:false},
+  {id:"k4",name:"Kaleidoscope four",n:4,m:true},
+  {id:"k6",name:"Kaleidoscope six",n:6,m:true},
+  {id:"k8",name:"Kaleidoscope eight",n:8,m:true}
+];
+function curSym(){const id=demo.on&&demo.sym?demo.sym:settings.sym;return SYMS.find(x=>x.id===id)||SYMS[0];}
+function curSpin(){return demo.on&&demo.spin!=null?demo.spin:(settings.spin-0.5)*2;}
 function splat(gx,gy,rad,dye,fvx,fvy,radial){
+  const sy=curSym();
+  if(sy.n===1&&!sy.m){splat1(gx,gy,rad,dye,fvx,fvy,radial);return;}
+  const dx=gx-C, dy=gy-C, copies=sy.n*(sy.m?2:1);
+  radial=radial/Math.sqrt(copies)/1.6;
+  for(let r=0;r<(sy.m?2:1);r++){
+    const mx=r?-1:1;
+    for(let k=0;k<sy.n;k++){
+      const a=Math.PI*2*k/sy.n, ca=Math.cos(a), sa=Math.sin(a);
+      const x=dx*mx, y=dy, vx=fvx*mx, vy=fvy;
+      splat1(C+x*ca-y*sa, C+x*sa+y*ca, rad, dye, vx*ca-vy*sa, vx*sa+vy*ca, radial);
+    }
+  }
+}
+function splat1(gx,gy,rad,dye,fvx,fvy,radial){
   const i0=Math.max(1,Math.floor(gx-rad)), i1=Math.min(N,Math.ceil(gx+rad));
   const j0=Math.max(1,Math.floor(gy-rad)), j1=Math.min(N,Math.ceil(gy+rad));
   for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){
@@ -445,19 +492,26 @@ const demoBtn=document.getElementById("demoBtn");
 const toG=n=>C+n*HALF;
 function startDemo(){
   freshCup();closeModal("resultModal");
+  clearTimeout(autoTimer);demo.art=false;demo.sym=null;demo.spin=null;
   demo.segs=DEMOS[settings.target]||DEMOS.heart;demo.i=0;demo.f=0;demo.on=true;phase=0;
   demoBtn.textContent="Stop";demoBtn.classList.add("on");
   document.getElementById("status").textContent="Demo pouring "+curTarget().name.toLowerCase();
 }
 function stopDemo(msg){
   if(!demo.on)return;
-  demo.on=false;demo.ptr.down=false;
+  demo.on=false;demo.ptr.down=false;demo.sym=null;demo.spin=null;
   demoBtn.textContent="Demo";demoBtn.classList.remove("on");
   if(msg)document.getElementById("status").textContent=msg;else updateStatus();
 }
 function demoTick(){
   const sg=demo.segs[demo.i];
-  if(!sg){stopDemo("Demo done · tap Fresh cup and try it yourself");return;}
+  if(!sg){
+    if(demo.art){
+      const keep=document.getElementById("status").textContent.replace(/^Pouring /,"");
+      stopDemo("Poured "+keep+" \u00b7 tap Finish to save it");
+      if(settings.autoArt)autoTimer=setTimeout(()=>{if(!demo.on&&!ptr.down)startArt();},2600);
+    }else stopDemo("Demo done \u00b7 tap Fresh cup and try it yourself");
+    return;}
   const dp=demo.ptr;
   if(sg.t==="wait"){dp.down=false;}
   else if(sg.t==="dot"){
@@ -465,8 +519,10 @@ function demoTick(){
     demo.i++;demo.f=0;return;
   }else{
     const tt=sg.n>1?demo.f/(sg.n-1):1;
-    const gx=toG(sg.a[0]+(sg.b[0]-sg.a[0])*tt), gy=toG(sg.a[1]+(sg.b[1]-sg.a[1])*tt);
-    if(demo.f===0){const ddx=sg.b[0]-sg.a[0],ddy=sg.b[1]-sg.a[1],dl=Math.hypot(ddx,ddy);Object.assign(dp,{gx,gy,px:gx,py:gy,vx:0,vy:0,dirx:dl?ddx/dl:1,diry:dl?ddy/dl:0});if(sg.t!=="wiggle")phase=0;}
+    const path=sg.path||[sg.a,sg.b];
+    const pt=pathPoint(path,tt);
+    const gx=toG(pt[0]), gy=toG(pt[1]);
+    if(demo.f===0){const nb=path.length>1?path[1]:path[0];const ddx=nb[0]-path[0][0],ddy=nb[1]-path[0][1],dl=Math.hypot(ddx,ddy);Object.assign(dp,{gx,gy,px:gx,py:gy,vx:0,vy:0,dirx:dl?ddx/dl:1,diry:dl?ddy/dl:0});if(sg.t!=="wiggle")phase=0;}
     dp.gx=gx;dp.gy=gy;dp.down=true;
     const keepW=settings.wamp;if(sg.amp!=null)settings.wamp=sg.amp;
     inject(dp,sg.t,sg.flow!=null?sg.flow:0.5);
@@ -475,11 +531,113 @@ function demoTick(){
   demo.f++;
   if(demo.f>=(sg.n||1)){demo.i++;demo.f=0;}
 }
-demoBtn.onclick=()=>{if(demo.on)stopDemo();else startDemo();};
+function pathPoint(path,t){
+  if(path.length===1)return path[0];
+  let tot=0;const L=[];
+  for(let n=1;n<path.length;n++){const l=Math.hypot(path[n][0]-path[n-1][0],path[n][1]-path[n-1][1]);L.push(l);tot+=l;}
+  if(tot===0)return path[0];
+  let want=t*tot;
+  for(let n=0;n<L.length;n++){
+    if(want<=L[n]||n===L.length-1){const f=L[n]?Math.min(1,want/L[n]):0;return [path[n][0]+(path[n+1][0]-path[n][0])*f,path[n][1]+(path[n+1][1]-path[n][1])*f];}
+    want-=L[n];
+  }
+  return path[path.length-1];
+}
+
+/* art generator: random recipes poured live with the real physics */
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const rint=(a,b)=>Math.floor(rnd(a,b+1));
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+function circ(r,a0,turns,steps){const p=[];for(let n=0;n<=steps;n++){const a=a0+turns*Math.PI*2*n/steps;p.push([Math.cos(a)*r,Math.sin(a)*r]);}return p;}
+function polar(r,a){return [Math.cos(a)*r,Math.sin(a)*r];}
+function rotP(p,a){const c=Math.cos(a),s2=Math.sin(a);return [p[0]*c-p[1]*s2,p[0]*s2+p[1]*c];}
+const W8={t:"wait",n:8};
+const RECIPES=[
+  function spiderWeb(){
+    const segs=[{t:"wait",n:10}],rings=rint(3,5),spokes=rint(6,10),dir=Math.random()<0.5?1:-1,a0=rnd(0,6.28);
+    segs.push({t:"pour",flow:0.6,a:[0,0],b:[0,0],n:26});
+    for(let k=0;k<rings;k++){const r=0.3+k*(0.52/(rings-1));segs.push({t:"pour",flow:0.24,path:circ(r,a0,1,48),n:Math.round(50+r*70)});segs.push({t:"wait",n:4});}
+    segs.push({t:"wait",n:12});
+    for(let k=0;k<spokes;k++){const a=a0+Math.PI*2*k/spokes;const p=[polar(0.86,a),[0,0]];if(dir<0)p.reverse();segs.push({t:"stick",path:p,n:24});segs.push({t:"wait",n:3});}
+    return {name:"Spider web",sym:"off",spin:0,segs};
+  },
+  function heartRing(){
+    const segs=[{t:"wait",n:10}],k=rint(7,11),r=rnd(0.45,0.6),a0=rnd(0,6.28);
+    for(let n=0;n<k;n++){segs.push({t:"pour",flow:0.55,a:polar(r,a0+Math.PI*2*n/k),b:polar(r,a0+Math.PI*2*n/k),n:16});segs.push({t:"wait",n:3});}
+    if(Math.random()<0.6)segs.push({t:"pour",flow:0.8,a:[0,0],b:[0,0],n:45});
+    segs.push({t:"wait",n:12});
+    segs.push({t:"stick",path:circ(r,a0-0.3,1.05,80),n:110});
+    return {name:"Ring of hearts",sym:"off",spin:0,segs};
+  },
+  function marble(){
+    const segs=[{t:"wait",n:10}],rows=rint(4,7),cols=rint(4,7),a=rnd(0,3.14);
+    for(let n=0;n<rows;n++){const y=-0.68+n*(1.36/(rows-1));const hw=Math.sqrt(Math.max(0.02,0.74-y*y));segs.push({t:"pour",flow:0.35,path:[rotP([-hw,y],a),rotP([hw,y],a)],n:46});segs.push({t:"wait",n:2});}
+    segs.push({t:"wait",n:12});
+    for(let n=0;n<cols;n++){const x=-0.66+n*(1.32/(cols-1));const hh=Math.sqrt(Math.max(0.02,0.74-x*x));const p=[rotP([x,-hh],a),rotP([x,hh],a)];if(n%2)p.reverse();segs.push({t:"stick",path:p,n:30});}
+    return {name:"Marbled comb",sym:"off",spin:0,segs};
+  },
+  function bloom(){
+    const sym=pick(["k4","k6","k8","spin3"]),segs=[{t:"wait",n:10}],ops=rint(3,5);
+    segs.push({t:"pour",flow:rnd(0.5,0.9),a:[0,0],b:[0,0],n:rint(25,55)});
+    for(let n=0;n<ops;n++){
+      const r=rnd(0.25,0.7),a=rnd(0,1.2),kind=pick(["pour","wiggle","pour","dot"]);
+      if(kind==="dot")segs.push({t:"pour",flow:0.4,a:polar(r,a),b:polar(r,a),n:rint(6,12)});
+      else if(kind==="wiggle")segs.push({t:"wiggle",flow:0.6,amp:0.25,path:[polar(r+0.15,a),polar(r-0.15,a)],n:40});
+      else segs.push({t:"pour",flow:rnd(0.4,0.7),a:polar(r,a),b:polar(r+0.08,a),n:rint(14,26)});
+      segs.push({t:"wait",n:4});
+    }
+    segs.push({t:"wait",n:10});
+    const sa=rnd(0,1.2);segs.push({t:"stick",path:Math.random()<0.5?[polar(0.82,sa),[0,0]]:[[0,0],polar(0.82,sa)],n:26});
+    if(Math.random()<0.6)segs.push({t:"stick",path:circ(rnd(0.3,0.6),0,0.5,30),n:40});
+    return {name:"Kaleidoscope bloom",sym,spin:0,segs};
+  },
+  function spiral(){
+    const segs=[{t:"wait",n:10}],sp=pick([-1,1])*rnd(0.6,1);
+    segs.push({t:"pour",flow:0.8,a:[0,0],b:[0,0],n:30});
+    segs.push({t:"pour",flow:0.45,a:[0.05,0],b:[0.78,0],n:160});
+    segs.push({t:"wait",n:10});
+    const a=rnd(0,3.14);segs.push({t:"stick",path:[polar(0.85,a),polar(0.85,a+Math.PI)],n:40});
+    if(Math.random()<0.5){segs.push({t:"stick",path:[polar(0.85,a+1.57),polar(0.85,a+1.57+Math.PI)],n:40});}
+    return {name:"Spin spiral",sym:"off",spin:sp,segs};
+  },
+  function rosettaTrio(){
+    const sym=pick(["spin3","k4"]),segs=[{t:"wait",n:10}],L=8,a=-Math.PI/2;
+    for(let n=0;n<L;n++){const r=0.78-n*0.07;segs.push({t:"wiggle",flow:0.75-n*0.04,amp:0.25,path:[polar(r,a),polar(r-0.04,a)],n:12-Math.floor(n/2)});segs.push({t:"wait",n:3});}
+    segs.push({t:"wait",n:10});segs.push({t:"stick",path:[polar(0.88,a),polar(0.1,a)],n:30});
+    return {name:"Rosetta crown",sym,spin:0,segs};
+  }
+];
+let autoTimer=null;
+function startArt(){
+  clearTimeout(autoTimer);
+  if(demo.on)stopDemo();
+  const rec=pick(RECIPES)();
+  freshCup();closeModal("resultModal");
+  demo.segs=rec.segs.concat([{t:"wait",n:40}]);demo.i=0;demo.f=0;demo.on=true;demo.art=true;demo.sym=rec.sym;demo.spin=rec.spin;phase=0;
+  demoBtn.textContent="Stop";demoBtn.classList.add("on");
+  const sy=SYMS.find(x=>x.id===rec.sym);
+  const label=rec.name+(sy&&sy.id!=="off"?" \u00b7 "+sy.name.toLowerCase():"");
+  document.getElementById("status").textContent="Pouring "+label.toLowerCase();
+  document.getElementById("artName").textContent="Now pouring: "+label;
+}
+document.getElementById("genBtn").onclick=()=>{closeMenu();startArt();};
+const autoEl=document.getElementById("autoArt");autoEl.checked=settings.autoArt;
+autoEl.onchange=()=>{settings.autoArt=autoEl.checked;saveSettings();if(autoEl.checked&&!demo.on){closeMenu();startArt();}};
+function buildSyms(){
+  const sl=document.getElementById("symList");sl.innerHTML="";
+  SYMS.forEach(x=>{const b=document.createElement("button");b.className="opt"+(x.id===settings.sym?" on":"");b.textContent=x.name;
+    b.onclick=()=>{settings.sym=x.id;saveSettings();buildSyms();};sl.appendChild(b);});
+}
+buildSyms();
+demoBtn.onclick=()=>{
+  if(demo.on){stopDemo();return;}
+  if(settings.target==="free")startArt();else startDemo();
+};
 
 function loop(){
   if(demo.on)demoTick();
   else if(ptr.down)inject(ptr,settings.tool,settings.flow);
+  pouringNow=demo.on?demo.ptr.down:ptr.down;
   step();
   draw();
   requestAnimationFrame(loop);
@@ -630,11 +788,11 @@ function bindRange(id,key){
   const el=document.getElementById(id);el.value=Math.round(settings[key]*100);
   el.oninput=()=>{settings[key]=el.value/100;saveSettings();};
 }
-bindRange("flow","flow");bindRange("spread","spread");bindRange("drag","drag");bindRange("wamp","wamp");
+bindRange("flow","flow");bindRange("spin","spin");bindRange("spread","spread");bindRange("drag","drag");bindRange("wamp","wamp");
 const gh=document.getElementById("ghost");gh.checked=settings.ghost;
 gh.onchange=()=>{settings.ghost=gh.checked;saveSettings();};
-document.getElementById("clearBtn").onclick=()=>{stopDemo();freshCup();};
-document.getElementById("finishBtn").onclick=()=>{stopDemo();finish();};
+document.getElementById("clearBtn").onclick=()=>{clearTimeout(autoTimer);stopDemo();freshCup();};
+document.getElementById("finishBtn").onclick=()=>{clearTimeout(autoTimer);stopDemo();finish();};
 document.getElementById("resSave").onclick=saveImage;
 document.getElementById("resFresh").onclick=()=>{freshCup();closeModal("resultModal");};
 document.getElementById("logBtn").onclick=()=>{renderLog();openModal("logModal");};
