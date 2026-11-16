@@ -21,7 +21,9 @@ h1 b{color:var(--blue)}
 #cv{touch-action:none;display:block}
 #status{height:24px;flex:0 0 24px;line-height:24px;text-align:center;font-size:13px;color:var(--soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 10px}
 .row{flex:0 0 60px;height:60px;display:flex;gap:8px;padding:6px 10px}
-.row button{flex:1;height:48px;border-radius:12px;border:2px solid var(--line);background:var(--card);color:var(--ink);font-size:15px;font-weight:700;padding:0}
+.row button{flex:1;min-width:0;height:48px;border-radius:12px;border:2px solid var(--line);background:var(--card);color:var(--ink);font-size:15px;font-weight:700;padding:0}
+.row.tools{gap:6px}
+.row.tools button{font-size:14px}
 .tool.on{border-color:var(--blue);background:var(--blue2);color:var(--blue)}
 .act.primary{background:var(--blue);border-color:var(--blue);color:#fff}
 .flow{display:flex;align-items:center;gap:10px;padding:0 14px;height:44px;flex:0 0 44px;font-size:13px;font-weight:600}
@@ -80,11 +82,12 @@ details[open] summary::after{content:"\25B4"}
   </header>
   <div id="stage"><canvas id="cv"></canvas></div>
   <div id="status">Pick a tool and pour</div>
-  <div class="row">
+  <div class="row tools">
     <button class="tool on" data-tool="pour">Pour</button>
     <button class="tool" data-tool="wiggle">Wiggle</button>
     <button class="tool" data-tool="stick">Stick</button>
     <button class="tool" data-tool="dot">Dot</button>
+    <button class="tool" data-tool="shake">Shake</button>
   </div>
   <div class="flow"><span>Flow</span><input id="flow" type="range" min="10" max="100" value="55"></div>
   <div class="row">
@@ -119,6 +122,13 @@ details[open] summary::after{content:"\25B4"}
       <button class="opt on" id="genBtn">Generate art</button>
       <label class="tog"><input type="checkbox" id="autoArt"> Gallery mode, keeps pouring new art</label>
       <div id="artName" style="color:var(--soft);margin-top:6px">Each one is poured live with the same milk physics you use.</div>
+    </div>
+  </details>
+  <details>
+    <summary>Garnish shaker</summary>
+    <div class="sect">
+      <div id="garnList"></div>
+      <div style="color:var(--soft)">Pick a garnish, then use the Shake tool. Flow sets how heavy you dust it. It floats and swirls with the foam.</div>
     </div>
   </details>
   <details>
@@ -257,6 +267,7 @@ function step(){
     for(let j=1;j<=N;j++)for(let i=1;i<=N;i++){const q=IX(i,j);if(!mask[q])continue;ua[q]+=-w*(j-C);va[q]+=w*(i-C);}
   }
   advect(0,d,d0,ua,va);
+  moveParticles();
   su.fill(0);sv.fill(0);
   const damp=0.988-settings.drag*0.06;
   for(let q=0;q<S;q++){u[q]*=damp;v[q]*=damp;}
@@ -284,7 +295,7 @@ const MODES=[
   {id:"esp",name:"Espresso on cream",base:[246,234,212],edge:[226,204,170],top:[96,54,28],topName:"espresso"},
   {id:"milk",name:"Milk on espresso",base:[164,102,52],edge:[110,62,28],top:[251,246,236],topName:"milk"}
 ];
-const settings={tool:"pour",flow:0.55,spread:0.45,drag:0.4,wamp:0.5,ghost:true,target:"free",mode:"esp",sym:"off",spin:0.5,autoArt:false};
+const settings={tool:"pour",flow:0.55,spread:0.45,drag:0.4,wamp:0.5,ghost:true,target:"free",mode:"esp",sym:"off",spin:0.5,autoArt:false,garnish:"cinnamon"};
 try{const sv=JSON.parse(localStorage.getItem("lartte-settings-v1")||"null");if(sv)Object.assign(settings,sv);}catch(e){}
 function saveSettings(){try{localStorage.setItem("lartte-settings-v1",JSON.stringify(settings));}catch(e){}}
 function curTarget(){return TARGETS.find(t=>t.id===settings.target)||TARGETS[0];}
@@ -361,6 +372,7 @@ function draw(){
   ctx.save();ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.clip();
   ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality="high";
   ctx.drawImage(oc,cx-R,cy-R,R*2,R*2);
+  if(pCount)drawParticles(ctx,cx-R,cy-R,2*R/N);
   if(settings.ghost&&curTarget().f)ctx.drawImage(gc,cx-R,cy-R,R*2,R*2);
   const sh=ctx.createRadialGradient(cx,cy,R*0.8,cx,cy,R);
   sh.addColorStop(0,"rgba(0,0,0,0)");sh.addColorStop(1,"rgba(40,20,5,0.18)");
@@ -409,6 +421,76 @@ const SYMS=[
 ];
 function curSym(){const id=demo.on&&demo.sym?demo.sym:settings.sym;return SYMS.find(x=>x.id===id)||SYMS[0];}
 function curSpin(){return demo.on&&demo.spin!=null?demo.spin:(settings.spin-0.5)*2;}
+
+/* garnish: floating powder and flakes carried by the foam */
+const GARNISHES=[
+  {id:"cinnamon",name:"Cinnamon",cols:["#8a4a1f","#a0592a","#6e3a17","#b8703a"],size:[0.7,1.5],shape:"dot",alpha:0.85,rate:1},
+  {id:"nutmeg",name:"Nutmeg",cols:["#5c3a1e","#7a5232","#4a2d17","#8d6440"],size:[0.6,1.2],shape:"dot",alpha:0.9,rate:0.8},
+  {id:"cocoa",name:"Cocoa powder",cols:["#3d2214","#4f2c1a","#2e190e"],size:[0.6,1.3],shape:"dot",alpha:0.8,rate:1.3},
+  {id:"salt",name:"Sea salt flakes",cols:["#ffffff","#f4f7fa","#e6edf3"],size:[1.6,3.2],shape:"flake",alpha:0.95,rate:0.35},
+  {id:"sugar",name:"Sugar sparkle",cols:["#ffffff","#fffdf5","#dbe9fb"],size:[0.6,1.2],shape:"sparkle",alpha:1,rate:0.7},
+  {id:"matcha",name:"Matcha dust",cols:["#6f8f3a","#86a64a","#5c7a2e"],size:[0.6,1.3],shape:"dot",alpha:0.85,rate:1.1},
+  {id:"sprinkles",name:"Rainbow sprinkles",cols:["#1e6fd9","#e94b6b","#f6c443","#47b881","#9b6bd6","#ffffff"],size:[1.8,3],shape:"rod",alpha:1,rate:0.25}
+];
+const PMAX=7000;
+const pgx=new Float32Array(PMAX),pgy=new Float32Array(PMAX),psz=new Float32Array(PMAX),prot=new Float32Array(PMAX);
+const pg=new Uint8Array(PMAX),pc=new Uint8Array(PMAX);
+let pCount=0,pHead=0;
+function curGarnish(){const id=demo.on&&demo.garnish?demo.garnish:settings.garnish;return GARNISHES.findIndex(g=>g.id===id)<0?0:GARNISHES.findIndex(g=>g.id===id);}
+function addParticle(gx,gy,gi){
+  const g=GARNISHES[gi];
+  const nx=(gx-C)/HALF,ny=(gy-C)/HALF;if(nx*nx+ny*ny>0.97)return;
+  const k=pHead;pHead=(pHead+1)%PMAX;if(pCount<PMAX)pCount++;
+  pgx[k]=gx;pgy[k]=gy;pg[k]=gi;pc[k]=Math.floor(Math.random()*g.cols.length);
+  psz[k]=g.size[0]+Math.random()*(g.size[1]-g.size[0]);prot[k]=Math.random()*Math.PI;
+}
+function gauss(){return (Math.random()+Math.random()+Math.random()-1.5)/1.5;}
+function shake1(gx,gy,fl,gi){
+  const g=GARNISHES[gi],count=Math.round((3+fl*26)*g.rate+Math.random()),rad=3+fl*7;
+  for(let n=0;n<count;n++)addParticle(gx+gauss()*rad,gy+gauss()*rad,gi);
+}
+function shake(gx,gy,fl){
+  const sy=curSym(),gi=curGarnish();
+  if(sy.n===1&&!sy.m){shake1(gx,gy,fl,gi);return;}
+  const dx=gx-C,dy=gy-C,copies=sy.n*(sy.m?2:1);
+  for(let r=0;r<(sy.m?2:1);r++)for(let k=0;k<sy.n;k++){
+    const a=Math.PI*2*k/sy.n,ca=Math.cos(a),sa=Math.sin(a),x=dx*(r?-1:1),y=dy;
+    shake1(C+x*ca-y*sa,C+x*sa+y*ca,fl/Math.sqrt(copies),gi);
+  }
+}
+function moveParticles(){
+  const dt0=DT*N;
+  for(let k=0;k<pCount;k++){
+    let x=pgx[k],y=pgy[k];
+    if(x<1)x=1;if(x>N)x=N;if(y<1)y=1;if(y>N)y=N;
+    const i0=x|0,j0=y|0,s1=x-i0,t1=y-j0,s0=1-s1,t0=1-t1;
+    const a=IX(i0,j0),b=IX(i0+1,j0),c=IX(i0,j0+1),e=IX(i0+1,j0+1);
+    const vx=s0*(t0*ua[a]+t1*ua[c])+s1*(t0*ua[b]+t1*ua[e]);
+    const vy=s0*(t0*va[a]+t1*va[c])+s1*(t0*va[b]+t1*va[e]);
+    x=pgx[k]+vx*dt0;y=pgy[k]+vy*dt0;
+    const nx=(x-C)/HALF,ny=(y-C)/HALF,rr=nx*nx+ny*ny;
+    if(rr>0.97){const sc=Math.sqrt(0.97/rr);x=C+nx*sc*HALF;y=C+ny*sc*HALF;}
+    pgx[k]=x;pgy[k]=y;
+  }
+}
+function drawParticles(c2,ox,oy,scale){
+  const glint=performance.now()/240;
+  for(let k=0;k<pCount;k++){
+    const g=GARNISHES[pg[k]],x=ox+(pgx[k]-0.5)*scale,y=oy+(pgy[k]-0.5)*scale,sz=psz[k]*scale*0.55;
+    c2.globalAlpha=g.alpha;c2.fillStyle=g.cols[pc[k]];
+    if(g.shape==="dot"){c2.fillRect(x-sz/2,y-sz/2,sz,sz);}
+    else if(g.shape==="sparkle"){
+      c2.fillRect(x-sz/2,y-sz/2,sz,sz);
+      if(Math.sin(glint+k*1.7)>0.93){c2.globalAlpha=0.9;c2.fillStyle="#ffffff";c2.fillRect(x-sz*1.6,y-sz*0.2,sz*3.2,sz*0.4);c2.fillRect(x-sz*0.2,y-sz*1.6,sz*0.4,sz*3.2);}
+    }else{
+      c2.save();c2.translate(x,y);c2.rotate(prot[k]);
+      if(g.shape==="rod"){c2.fillRect(-sz*1.4,-sz*0.35,sz*2.8,sz*0.7);}
+      else{c2.globalAlpha=0.55;c2.fillStyle="#9fb6cc";c2.fillRect(-sz/2+0.6,-sz/2+0.6,sz,sz);c2.globalAlpha=g.alpha;c2.fillStyle=g.cols[pc[k]];c2.fillRect(-sz/2,-sz/2,sz,sz);}
+      c2.restore();
+    }
+  }
+  c2.globalAlpha=1;
+}
 function splat(gx,gy,rad,dye,fvx,fvy,radial){
   const sy=curSym();
   if(sy.n===1&&!sy.m){splat1(gx,gy,rad,dye,fvx,fvy,radial);return;}
@@ -469,6 +551,8 @@ function inject(ptr,tool,fl){
     splat(wx,wy,2+fl*3,0.3+fl*0.4,ptr.vx*k*0.9+px*wv,ptr.vy*k*0.9+py*wv,1.1*fl*(0.4+settings.spread));
   }else if(tool==="stick"){
     if(sp>0.02)splat(ptr.gx,ptr.gy,2.2,0,ptr.vx*k*0.75,ptr.vy*k*0.75,0);
+  }else if(tool==="shake"){
+    shake(ptr.gx,ptr.gy,fl);
   }else if(tool==="dot"){
     if(ptr.lastDot){
       const dd=Math.hypot(ptr.gx-ptr.lastDot.x,ptr.gy-ptr.lastDot.y);
@@ -499,7 +583,7 @@ function startDemo(){
 }
 function stopDemo(msg){
   if(!demo.on)return;
-  demo.on=false;demo.ptr.down=false;demo.sym=null;demo.spin=null;
+  demo.on=false;demo.ptr.down=false;demo.sym=null;demo.spin=null;demo.garnish=null;
   demoBtn.textContent="Demo";demoBtn.classList.remove("on");
   if(msg)document.getElementById("status").textContent=msg;else updateStatus();
 }
@@ -613,7 +697,16 @@ function startArt(){
   if(demo.on)stopDemo();
   const rec=pick(RECIPES)();
   freshCup();closeModal("resultModal");
-  demo.segs=rec.segs.concat([{t:"wait",n:40}]);demo.i=0;demo.f=0;demo.on=true;demo.art=true;demo.sym=rec.sym;demo.spin=rec.spin;phase=0;
+  let extra=[];demo.garnish=null;
+  if(Math.random()<0.55){
+    const gz=pick(GARNISHES);demo.garnish=gz.id;rec.name+=" with "+gz.name.toLowerCase();
+    const style=pick(["ring","center","rim","scatter"]);
+    if(style==="ring")extra=[{t:"wait",n:20},{t:"shake",flow:0.35,path:circ(rnd(0.35,0.65),rnd(0,6.28),1,40),n:70}];
+    else if(style==="center")extra=[{t:"wait",n:20},{t:"shake",flow:0.6,a:[0,0],b:[0,0],n:30}];
+    else if(style==="rim")extra=[{t:"wait",n:20},{t:"shake",flow:0.3,path:circ(0.86,0,1,48),n:80}];
+    else extra=[{t:"wait",n:20},{t:"shake",flow:0.25,path:[[-0.6,-0.5],[0.6,-0.3],[-0.5,0.2],[0.55,0.55]],n:70}];
+  }
+  demo.segs=rec.segs.concat(extra,[{t:"wait",n:40}]);demo.i=0;demo.f=0;demo.on=true;demo.art=true;demo.sym=rec.sym;demo.spin=rec.spin;phase=0;
   demoBtn.textContent="Stop";demoBtn.classList.add("on");
   const sy=SYMS.find(x=>x.id===rec.sym);
   const label=rec.name+(sy&&sy.id!=="off"?" \u00b7 "+sy.name.toLowerCase():"");
@@ -628,6 +721,14 @@ function buildSyms(){
   SYMS.forEach(x=>{const b=document.createElement("button");b.className="opt"+(x.id===settings.sym?" on":"");b.textContent=x.name;
     b.onclick=()=>{settings.sym=x.id;saveSettings();buildSyms();};sl.appendChild(b);});
 }
+function buildGarn(){
+  const gl=document.getElementById("garnList");gl.innerHTML="";
+  GARNISHES.forEach(g=>{const b=document.createElement("button");b.className="opt"+(g.id===settings.garnish?" on":"");b.textContent=g.name;
+    b.onclick=()=>{settings.garnish=g.id;saveSettings();buildGarn();
+      settings.tool="shake";document.querySelectorAll(".tool").forEach(x=>x.classList.toggle("on",x.dataset.tool==="shake"));};
+    gl.appendChild(b);});
+}
+buildGarn();
 buildSyms();
 demoBtn.onclick=()=>{
   if(demo.on){stopDemo();return;}
@@ -659,11 +760,12 @@ function coverage(){
   return Math.round(a/n*100);
 }
 function snapshot(){
-  const s=document.createElement("canvas");s.width=140;s.height=140;
-  const sc=s.getContext("2d");
+  const s2=document.createElement("canvas");s2.width=140;s2.height=140;
+  const sc=s2.getContext("2d");
   sc.beginPath();sc.arc(70,70,70,0,Math.PI*2);sc.clip();
-  sc.drawImage(oc,0,0,140,140);
-  return s.toDataURL("image/jpeg",0.75);
+  const gs=settings.ghost;settings.ghost=false;draw();settings.ghost=gs;
+  sc.drawImage(cv,(cx-R)*dpr,(cy-R)*dpr,2*R*dpr,2*R*dpr,0,0,140,140);
+  return s2.toDataURL("image/jpeg",0.75);
 }
 function loadLog(){try{return JSON.parse(localStorage.getItem("lartte-log-v1")||"[]");}catch(e){return [];}}
 function saveLog(l){try{localStorage.setItem("lartte-log-v1",JSON.stringify(l));}catch(e){}}
@@ -751,7 +853,7 @@ function updateStatus(){
   }
   document.getElementById("status").textContent=txt;
 }
-function freshCup(){u.fill(0);v.fill(0);u0.fill(0);v0.fill(0);d.fill(0);d0.fill(0);}
+function freshCup(){u.fill(0);v.fill(0);u0.fill(0);v0.fill(0);d.fill(0);d0.fill(0);pCount=0;pHead=0;}
 
 /* ui */
 function openModal(id){document.getElementById(id).classList.add("open");}
