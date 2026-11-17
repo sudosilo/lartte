@@ -23,7 +23,16 @@ h1 b{color:var(--blue)}
 .row{flex:0 0 60px;height:60px;display:flex;gap:8px;padding:6px 10px}
 .row button{flex:1;min-width:0;height:48px;border-radius:12px;border:2px solid var(--line);background:var(--card);color:var(--ink);font-size:15px;font-weight:700;padding:0}
 .row.tools{gap:6px}
-.row.tools button{font-size:14px}
+.row.tools button{font-size:14px;position:relative}
+.row.tools button .sw{position:absolute;left:22%;right:22%;bottom:6px;height:4px;border-radius:2px;background:transparent}
+.row.tools button .car{position:absolute;right:5px;top:3px;font-size:9px;color:var(--blue)}
+#pop{position:fixed;z-index:15;display:none;background:#fffdf9;border:2px solid var(--blue);border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:10px;max-height:52vh;overflow-y:auto}
+#pop.open{display:block}
+#pop h4{margin:4px 2px 8px;font-size:13px;color:var(--blue);letter-spacing:.4px}
+#pop .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;margin-bottom:8px}
+#pop .ch{display:flex;align-items:center;gap:7px;min-height:42px;padding:6px 8px;border-radius:10px;border:2px solid var(--line);background:#fff;font-size:13px;font-weight:700;color:var(--ink);text-align:left}
+#pop .ch.on{border-color:var(--blue);background:var(--blue2);color:var(--blue)}
+#pop .ch i{flex:0 0 18px;width:18px;height:18px;border-radius:50%;border:1px solid rgba(0,0,0,.15)}
 .tool.on{border-color:var(--blue);background:var(--blue2);color:var(--blue)}
 .act.primary{background:var(--blue);border-color:var(--blue);color:#fff}
 .flow{display:flex;align-items:center;gap:10px;padding:0 14px;height:44px;flex:0 0 44px;font-size:13px;font-weight:600}
@@ -83,11 +92,11 @@ details[open] summary::after{content:"\25B4"}
   <div id="stage"><canvas id="cv"></canvas></div>
   <div id="status">Pick a tool and pour</div>
   <div class="row tools">
-    <button class="tool on" data-tool="pour">Pour</button>
-    <button class="tool" data-tool="wiggle">Wiggle</button>
-    <button class="tool" data-tool="stick">Stick</button>
-    <button class="tool" data-tool="dot">Dot</button>
-    <button class="tool" data-tool="shake">Shake</button>
+    <button class="tool on" data-tool="pour">Pour<span class="car">&#9662;</span><span class="sw"></span></button>
+    <button class="tool" data-tool="stick">Stick<span class="car">&#9662;</span><span class="sw"></span></button>
+    <button class="tool" data-tool="syrup">Syrup<span class="car">&#9662;</span><span class="sw"></span></button>
+    <button class="tool" data-tool="shake">Shake<span class="car">&#9662;</span><span class="sw"></span></button>
+    <button class="tool" data-tool="top">Top<span class="car">&#9662;</span><span class="sw"></span></button>
   </div>
   <div class="flow"><span>Flow</span><input id="flow" type="range" min="10" max="100" value="55"></div>
   <div class="row">
@@ -97,6 +106,7 @@ details[open] summary::after{content:"\25B4"}
   </div>
 </div>
 
+<div id="pop"></div>
 <div id="scrim"></div>
 <nav id="menu">
   <div class="top"><h2>l<b>ART</b>te</h2><button class="x" id="menuX">&times;</button></div>
@@ -125,13 +135,6 @@ details[open] summary::after{content:"\25B4"}
     </div>
   </details>
   <details>
-    <summary>Garnish shaker</summary>
-    <div class="sect">
-      <div id="garnList"></div>
-      <div style="color:var(--soft)">Pick a garnish, then use the Shake tool. Flow sets how heavy you dust it. It floats and swirls with the foam.</div>
-    </div>
-  </details>
-  <details>
     <summary>Symmetry and cup spin</summary>
     <div class="sect">
       <div id="symList"></div>
@@ -155,10 +158,11 @@ details[open] summary::after{content:"\25B4"}
   <details>
     <summary>How to pour</summary>
     <div class="sect">
-      Pour lays down color where your finger is. Hold still to grow a blob, drag to push it across the cup.<br><br>
-      Wiggle rocks the pour side to side while you drag, which builds the stacked leaves of a rosetta.<br><br>
-      Stick is the etching tool. It lays down no color and only drags the foam, so pulling it straight through a blob turns it into a heart.<br><br>
-      Dot drops small spots. Drag with it to lay a chain of dots, then pull the stick through them.<br><br>
+      Every tool button opens its own drop down. Tap a tool to pick what it pours, shakes or drops.<br><br>
+      Pour lays down the liquid you pick: steamed milk, chocolate milk, caramel cream and more. Hold still to grow a blob, drag to push it across the cup. Its drop down also has Wiggle, which rocks the pour side to side for rosettas, and Dots, which lays a chain of spots.<br><br>
+      Stick is the etching tool. It lays down no color and only drags the foam, so pulling it straight through a blob turns it into a heart. Pick a needle, a stick or a spoon.<br><br>
+      Syrup drizzles thin lines of chocolate, caramel and more. Drizzle lines, then drag the stick across them for the classic feathered mocha look.<br><br>
+      Shake dusts cinnamon, cocoa, salt and friends. Top drops whipped cream, cherries, candy canes and chocolate chunks. Drag right after you drop one to slide it into place.<br><br>
       Pick a target, pour, then tap Finish to score it against the guide and save it to your log.
     </div>
   </details>
@@ -192,6 +196,9 @@ const IX=(i,j)=>i+W2*j;
 let u=new Float32Array(S), v=new Float32Array(S), u0=new Float32Array(S), v0=new Float32Array(S);
 let d=new Float32Array(S), d0=new Float32Array(S);
 const su=new Float32Array(S), sv=new Float32Array(S), ua=new Float32Array(S), va=new Float32Array(S);
+let cR=new Float32Array(S), cG=new Float32Array(S), cB=new Float32Array(S);
+const c0=new Float32Array(S);
+let injCol=[96,54,28];
 const p=new Float32Array(S), dv=new Float32Array(S);
 const mask=new Uint8Array(S), noise=new Float32Array(S), tgt=new Uint8Array(S);
 const C=(N+1)/2, HALF=N/2;
@@ -267,11 +274,15 @@ function step(){
     for(let j=1;j<=N;j++)for(let i=1;i<=N;i++){const q=IX(i,j);if(!mask[q])continue;ua[q]+=-w*(j-C);va[q]+=w*(i-C);}
   }
   advect(0,d,d0,ua,va);
+  c0.set(cR);advect(0,cR,c0,ua,va);
+  c0.set(cG);advect(0,cG,c0,ua,va);
+  c0.set(cB);advect(0,cB,c0,ua,va);
   moveParticles();
+  moveToppings();
   su.fill(0);sv.fill(0);
   const damp=0.988-settings.drag*0.06;
   for(let q=0;q<S;q++){u[q]*=damp;v[q]*=damp;}
-  for(let n=0;n<outside.length;n++)d[outside[n]]=0;
+  for(let n=0;n<outside.length;n++){const q=outside[n];d[q]=0;cR[q]=0;cG[q]=0;cB[q]=0;}
 }
 
 /* targets in liquid coords, nx right, ny down, both from -1 to 1 */
@@ -295,8 +306,48 @@ const MODES=[
   {id:"esp",name:"Espresso on cream",base:[246,234,212],edge:[226,204,170],top:[96,54,28],topName:"espresso"},
   {id:"milk",name:"Milk on espresso",base:[164,102,52],edge:[110,62,28],top:[251,246,236],topName:"milk"}
 ];
-const settings={tool:"pour",flow:0.55,spread:0.45,drag:0.4,wamp:0.5,ghost:true,target:"free",mode:"esp",sym:"off",spin:0.5,autoArt:false,garnish:"cinnamon"};
+const LIQUIDS=[
+  {id:"milk",name:"Steamed milk",c:[251,246,236]},
+  {id:"choc",name:"Chocolate milk",c:[150,95,60]},
+  {id:"white",name:"White chocolate",c:[244,230,196]},
+  {id:"caramel",name:"Caramel cream",c:[214,158,86]},
+  {id:"matcha",name:"Matcha milk",c:[150,184,98]},
+  {id:"straw",name:"Strawberry milk",c:[242,168,182]},
+  {id:"blue",name:"Blue spirulina milk",c:[112,166,232]},
+  {id:"ube",name:"Ube cream",c:[170,130,205]},
+  {id:"espresso",name:"Espresso",c:[96,54,28]},
+  {id:"ristretto",name:"Ristretto",c:[58,30,14]}
+];
+const SYRUPS=[
+  {id:"choc",name:"Chocolate syrup",c:[66,32,16]},
+  {id:"caramel",name:"Caramel",c:[186,110,36]},
+  {id:"white",name:"White chocolate",c:[252,247,232]},
+  {id:"straw",name:"Strawberry",c:[198,38,70]},
+  {id:"blueb",name:"Blueberry",c:[58,86,186]},
+  {id:"honey",name:"Honey",c:[226,166,46]}
+];
+const SYRUP_W=[{id:"fine",name:"Fine",w:1.1},{id:"med",name:"Medium",w:1.7},{id:"thick",name:"Thick",w:2.5}];
+const STICKS=[{id:"needle",name:"Needle",r:1.4,k:0.6},{id:"stick",name:"Stick",r:2.2,k:0.75},{id:"spoon",name:"Spoon",r:4,k:0.9}];
+const POUR_STYLES=[{id:"pour",name:"Steady pour"},{id:"wiggle",name:"Wiggle"},{id:"dot",name:"Dots"}];
+const TOPPINGS=[
+  {id:"whip",name:"Whipped cream",c:"#ffffff"},
+  {id:"cherry",name:"Cherry",c:"#c8102e"},
+  {id:"cane",name:"Candy cane",c:"#e0242f"},
+  {id:"dchoc",name:"Chocolate chunk",c:"#3b2012"},
+  {id:"wchoc",name:"White chocolate chunk",c:"#f3ead2"},
+  {id:"mallow",name:"Marshmallows",c:"#fbfbf7"},
+  {id:"cinn",name:"Cinnamon stick",c:"#8a4a1f"},
+  {id:"mint",name:"Mint leaf",c:"#3f9a4a"},
+  {id:"curls",name:"Chocolate curls",c:"#4a2816"},
+  {id:"star",name:"Star anise",c:"#6b3b1d"}
+];
+const settings={tool:"pour",flow:0.55,spread:0.45,drag:0.4,wamp:0.5,ghost:true,target:"free",mode:"esp",sym:"off",spin:0.5,autoArt:false,garnish:"cinnamon",pourStyle:"pour",liqEsp:"espresso",liqMilk:"milk",syrup:"choc",syrupW:"med",stick:"stick",topping:"whip"};
 try{const sv=JSON.parse(localStorage.getItem("lartte-settings-v1")||"null");if(sv)Object.assign(settings,sv);}catch(e){}
+if(settings.tool==="wiggle"||settings.tool==="dot"){settings.pourStyle=settings.tool;settings.tool="pour";}
+function curLiquidId(){return settings.mode==="milk"?settings.liqMilk:settings.liqEsp;}
+function liquid(id){return LIQUIDS.find(x=>x.id===id)||LIQUIDS[0];}
+function syrupOf(id){return SYRUPS.find(x=>x.id===id)||SYRUPS[0];}
+function defaultLiq(){return settings.mode==="milk"?"milk":"espresso";}
 function saveSettings(){try{localStorage.setItem("lartte-settings-v1",JSON.stringify(settings));}catch(e){}}
 function curTarget(){return TARGETS.find(t=>t.id===settings.target)||TARGETS[0];}
 function curMode(){return MODES.find(m=>m.id===settings.mode)||MODES[0];}
@@ -337,7 +388,7 @@ function buildGhost(){
   gctx.putImageData(gi,0,0);
 }
 function renderLiquid(){
-  const m=curMode(), b=m.base, e=m.edge, t=m.top, px=img.data;
+  const m=curMode(), b=m.base, e=m.edge, px=img.data;
   for(let j=1;j<=N;j++)for(let i=1;i<=N;i++){
     const k=IX(i,j), o=((j-1)*N+(i-1))*4;
     if(!mask[k]){px[o+3]=0;continue;}
@@ -347,7 +398,9 @@ function renderLiquid(){
     let a=d[k]; if(a<0)a=0; if(a>1)a=1;
     a=a*a*(3-2*a);
     const br=b[0]+(e[0]-b[0])*ed+nz, bg=b[1]+(e[1]-b[1])*ed+nz, bb=b[2]+(e[2]-b[2])*ed+nz;
-    px[o]=br+(t[0]+nz*0.5-br)*a; px[o+1]=bg+(t[1]+nz*0.5-bg)*a; px[o+2]=bb+(t[2]+nz*0.5-bb)*a; px[o+3]=255;
+    let tr=0,tg=0,tb=0;
+    if(d[k]>0.002){const id=1/d[k];tr=cR[k]*id;tg=cG[k]*id;tb=cB[k]*id;}
+    px[o]=br+(tr+nz*0.5-br)*a; px[o+1]=bg+(tg+nz*0.5-bg)*a; px[o+2]=bb+(tb+nz*0.5-bb)*a; px[o+3]=255;
   }
   octx.putImageData(img,0,0);
 }
@@ -378,6 +431,7 @@ function draw(){
   sh.addColorStop(0,"rgba(0,0,0,0)");sh.addColorStop(1,"rgba(40,20,5,0.18)");
   ctx.fillStyle=sh;ctx.fillRect(cx-R,cy-R,R*2,R*2);
   ctx.restore();
+  if(tops.length)drawToppings(ctx,cx-R,cy-R,2*R/N,R);
   // pitcher marker
   if(ptr.down){
     ctx.beginPath();ctx.arc(ptr.sx,ptr.sy,8+settings.flow*10,0,Math.PI*2);
@@ -401,14 +455,18 @@ cv.addEventListener("pointerdown",e=>{
   cv.setPointerCapture(e.pointerId);
   const g=toGrid(e);
   Object.assign(ptr,g,{down:true,px:g.gx,py:g.gy,vx:0,vy:0,id:e.pointerId,lastDot:null});
-  phase=0;
-  if(settings.tool==="dot"){dropDot(g.gx,g.gy);ptr.lastDot={x:g.gx,y:g.gy};}
+  phase=0;closePop();
+  ptr.stick=null;ptr.syrupW=null;
+  setInjColor();
+  const at=activeTool();
+  if(at==="dot"){dropDot(g.gx,g.gy);ptr.lastDot={x:g.gx,y:g.gy};}
+  if(at==="top"){dragTop=addTopping(settings.topping,g.gx,g.gy);}
 });
 cv.addEventListener("pointermove",e=>{
   if(!ptr.down||e.pointerId!==ptr.id)return;
   const g=toGrid(e);ptr.sx=g.sx;ptr.sy=g.sy;ptr.gx=g.gx;ptr.gy=g.gy;
 });
-function up(e){if(e.pointerId===ptr.id){ptr.down=false;ptr.id=null;}}
+function up(e){if(e.pointerId===ptr.id){ptr.down=false;ptr.id=null;dragTop=-1;}}
 cv.addEventListener("pointerup",up);cv.addEventListener("pointercancel",up);
 
 const SYMS=[
@@ -491,6 +549,124 @@ function drawParticles(c2,ox,oy,scale){
   }
   c2.globalAlpha=1;
 }
+
+/* toppings: objects that float on the foam */
+const tops=[];let dragTop=-1;
+function addTopping(kind,gx,gy){
+  const sy=curSym(),list=[];
+  const one=(x,y,rot)=>{tops.push({kind,x,y,rot,seed:Math.random()*1000});list.push(tops.length-1);};
+  const base=Math.random()*Math.PI*2;
+  if(sy.n===1&&!sy.m)one(gx,gy,base);
+  else{const dx=gx-C,dy=gy-C;
+    for(let r=0;r<(sy.m?2:1);r++)for(let k=0;k<sy.n;k++){const a=Math.PI*2*k/sy.n,ca=Math.cos(a),sa=Math.sin(a),x=dx*(r?-1:1),y=dy;one(C+x*ca-y*sa,C+x*sa+y*ca,base*(r?-1:1)+a);}}
+  while(tops.length>60)tops.shift();
+  return tops.length-1;
+}
+function moveToppings(){
+  const dt0=DT*N*0.35;
+  for(let n=0;n<tops.length;n++){
+    if(n===dragTop&&ptr.down)continue;
+    const t=tops[n];let x=t.x,y=t.y;
+    if(x<1)x=1;if(x>N)x=N;if(y<1)y=1;if(y>N)y=N;
+    const q=IX(Math.round(x),Math.round(y));
+    t.x+=ua[q]*dt0;t.y+=va[q]*dt0;
+    const nx=(t.x-C)/HALF,ny=(t.y-C)/HALF,rr=nx*nx+ny*ny;
+    if(rr>1.02){const sc=Math.sqrt(1.02/rr);t.x=C+nx*sc*HALF;t.y=C+ny*sc*HALF;}
+  }
+}
+function rr32(seed){let x=Math.sin(seed)*43758.5453;return x-Math.floor(x);}
+function drawTopping(c2,t,X,Y,U){
+  c2.save();c2.translate(X,Y);c2.rotate(t.rot);
+  const sh=(blur,oy)=>{c2.shadowColor="rgba(40,20,5,0.35)";c2.shadowBlur=blur;c2.shadowOffsetY=oy;};
+  const nos=()=>{c2.shadowColor="transparent";c2.shadowBlur=0;c2.shadowOffsetY=0;};
+  if(t.kind==="whip"){
+    const r=U*0.28;
+    sh(r*0.25,r*0.08);
+    for(let k=0;k<4;k++){
+      const rr=r*(1-k*0.22), off=r*0.08*k;
+      const g=c2.createRadialGradient(-rr*0.3+off,-rr*0.35,rr*0.1,off*0.3,0,rr);
+      g.addColorStop(0,"#ffffff");g.addColorStop(0.7,"#f7f4ee");g.addColorStop(1,"#ddd6ca");
+      c2.fillStyle=g;c2.beginPath();
+      for(let a=0;a<=Math.PI*2+0.01;a+=Math.PI/14){const w=rr*(0.9+0.1*Math.sin(a*7+k));c2.lineTo(Math.cos(a)*w+off*0.4,Math.sin(a)*w-off);}
+      c2.fill();if(k===0)nos();
+      c2.strokeStyle="rgba(190,180,165,0.6)";c2.lineWidth=Math.max(1,U*0.006);
+      c2.beginPath();c2.arc(off*0.4,-off,rr*0.8,0.4+k,2.4+k);c2.stroke();
+    }
+    c2.fillStyle="#ffffff";c2.beginPath();c2.ellipse(r*0.12,-r*0.42,r*0.12,r*0.18,0.5,0,Math.PI*2);c2.fill();
+  }else if(t.kind==="cherry"){
+    const r=U*0.07;
+    c2.strokeStyle="#4b5d1e";c2.lineWidth=Math.max(1.5,U*0.012);c2.lineCap="round";
+    c2.beginPath();c2.moveTo(0,-r*0.8);c2.quadraticCurveTo(r*0.4,-r*2.2,r*1.4,-r*2.6);c2.stroke();
+    sh(r*0.6,r*0.25);
+    const g=c2.createRadialGradient(-r*0.35,-r*0.35,r*0.1,0,0,r);
+    g.addColorStop(0,"#ff6b78");g.addColorStop(0.45,"#d0142f");g.addColorStop(1,"#7a0716");
+    c2.fillStyle=g;c2.beginPath();c2.arc(0,0,r,0,Math.PI*2);c2.fill();nos();
+    c2.fillStyle="rgba(255,255,255,0.8)";c2.beginPath();c2.ellipse(-r*0.35,-r*0.4,r*0.22,r*0.13,-0.6,0,Math.PI*2);c2.fill();
+  }else if(t.kind==="cane"){
+    const w=U*0.05,L=U*0.42;
+    const path=()=>{c2.beginPath();c2.moveTo(0,L*0.5);c2.lineTo(0,-L*0.25);c2.arc(-L*0.16,-L*0.25,L*0.16,0,Math.PI,true);c2.lineTo(-L*0.32,-L*0.12);};
+    c2.lineCap="round";sh(w*0.8,w*0.3);
+    c2.strokeStyle="#fffdfa";c2.lineWidth=w;path();c2.stroke();nos();
+    c2.strokeStyle="#e0242f";c2.lineWidth=w*0.85;c2.setLineDash([w*0.55,w*0.75]);path();c2.stroke();
+    c2.strokeStyle="#1e6fd9";c2.lineWidth=w*0.25;c2.lineDashOffset=w*0.6;c2.setLineDash([w*0.18,w*1.12]);path();c2.stroke();
+    c2.setLineDash([]);
+    c2.strokeStyle="rgba(255,255,255,0.6)";c2.lineWidth=w*0.18;c2.beginPath();c2.moveTo(-w*0.2,L*0.45);c2.lineTo(-w*0.2,-L*0.2);c2.stroke();
+  }else if(t.kind==="dchoc"||t.kind==="wchoc"){
+    const s=U*0.1,dk=t.kind==="dchoc";
+    const pts=[];for(let k=0;k<7;k++){const a=k/7*Math.PI*2;const r=s*(0.75+rr32(t.seed+k)*0.4);pts.push([Math.cos(a)*r,Math.sin(a)*r*0.85]);}
+    sh(s*0.4,s*0.18);
+    c2.fillStyle=dk?"#2b160b":"#d9ccad";c2.beginPath();pts.forEach(p=>c2.lineTo(p[0],p[1]+s*0.12));c2.closePath();c2.fill();nos();
+    const g=c2.createLinearGradient(-s,-s,s,s);
+    if(dk){g.addColorStop(0,"#6b4027");g.addColorStop(1,"#3a1f10");}else{g.addColorStop(0,"#fffaf0");g.addColorStop(1,"#e8dcbf");}
+    c2.fillStyle=g;c2.beginPath();pts.forEach(p=>c2.lineTo(p[0]*0.86,p[1]*0.86));c2.closePath();c2.fill();
+    c2.strokeStyle=dk?"rgba(255,220,190,0.35)":"rgba(255,255,255,0.9)";c2.lineWidth=Math.max(1,s*0.06);
+    c2.beginPath();c2.moveTo(pts[3][0]*0.6,pts[3][1]*0.6);c2.lineTo(pts[5][0]*0.6,pts[5][1]*0.6);c2.stroke();
+  }else if(t.kind==="mallow"){
+    const s=U*0.045;
+    for(let k=0;k<4;k++){
+      const ox=(rr32(t.seed+k)-0.5)*s*4,oy=(rr32(t.seed+k+9)-0.5)*s*4,a=rr32(t.seed+k+3)*3;
+      c2.save();c2.translate(ox,oy);c2.rotate(a);sh(s*0.5,s*0.2);
+      c2.fillStyle="#f4f1ea";c2.beginPath();c2.roundRect(-s,-s*0.8,s*2,s*1.6,s*0.5);c2.fill();nos();
+      c2.fillStyle="#ffffff";c2.beginPath();c2.ellipse(0,-s*0.2,s*0.8,s*0.5,0,0,Math.PI*2);c2.fill();
+      c2.restore();
+    }
+  }else if(t.kind==="cinn"){
+    const L=U*0.5,w=U*0.055;sh(w*0.7,w*0.3);
+    const g=c2.createLinearGradient(0,-w,0,w);g.addColorStop(0,"#b0703a");g.addColorStop(0.5,"#8a4a1f");g.addColorStop(1,"#5c2e10");
+    c2.fillStyle=g;c2.beginPath();c2.roundRect(-L/2,-w,L,w*2,w*0.5);c2.fill();nos();
+    c2.strokeStyle="rgba(60,25,8,0.6)";c2.lineWidth=Math.max(1,w*0.12);
+    for(let k=-3;k<=3;k++){c2.beginPath();c2.moveTo(k*L*0.13,-w*0.9);c2.lineTo(k*L*0.13+w*0.4,w*0.9);c2.stroke();}
+    c2.fillStyle="#5c2e10";c2.beginPath();c2.ellipse(L/2,0,w*0.35,w,0,0,Math.PI*2);c2.fill();
+    c2.strokeStyle="#c4884f";c2.beginPath();c2.arc(L/2,0,w*0.5,0,Math.PI*1.5);c2.stroke();
+  }else if(t.kind==="mint"){
+    const L=U*0.13;
+    for(let k=0;k<2;k++){
+      c2.save();c2.rotate(k?0.9:-0.3);sh(L*0.2,L*0.08);
+      const g=c2.createLinearGradient(-L,0,L,0);g.addColorStop(0,"#2f7d38");g.addColorStop(1,"#6cc06f");
+      c2.fillStyle=g;c2.beginPath();c2.moveTo(0,0);c2.quadraticCurveTo(L*0.5,-L*0.5,L*1.1,0);c2.quadraticCurveTo(L*0.5,L*0.5,0,0);c2.fill();nos();
+      c2.strokeStyle="rgba(220,255,220,0.7)";c2.lineWidth=Math.max(1,L*0.05);c2.beginPath();c2.moveTo(0,0);c2.lineTo(L,0);c2.stroke();
+      c2.restore();
+    }
+  }else if(t.kind==="curls"){
+    const s=U*0.06;
+    for(let k=0;k<6;k++){
+      const ox=(rr32(t.seed+k)-0.5)*s*5,oy=(rr32(t.seed+k+7)-0.5)*s*5;
+      c2.save();c2.translate(ox,oy);c2.rotate(rr32(t.seed+k*3)*6);
+      c2.strokeStyle=k%3?"#4a2816":"#6b3d22";c2.lineWidth=Math.max(1.2,s*0.3);c2.lineCap="round";
+      c2.beginPath();for(let a=0;a<Math.PI*2.6;a+=0.3){const r=s*(0.2+a*0.1);c2.lineTo(Math.cos(a)*r,Math.sin(a)*r*0.6);}c2.stroke();
+      c2.restore();
+    }
+  }else if(t.kind==="star"){
+    const r=U*0.08;sh(r*0.4,r*0.15);
+    c2.fillStyle="#5a2f15";c2.beginPath();
+    for(let k=0;k<16;k++){const a=k/16*Math.PI*2;const rr=k%2?r*0.35:r;c2.lineTo(Math.cos(a)*rr,Math.sin(a)*rr);}c2.closePath();c2.fill();nos();
+    c2.fillStyle="#c08a4e";for(let k=0;k<8;k++){const a=k/8*Math.PI*2;c2.beginPath();c2.arc(Math.cos(a)*r*0.6,Math.sin(a)*r*0.6,r*0.1,0,Math.PI*2);c2.fill();}
+  }
+  c2.restore();
+}
+function drawToppings(c2,ox,oy,scale,U){
+  for(const t of tops)drawTopping(c2,t,ox+(t.x-0.5)*scale,oy+(t.y-0.5)*scale,U);
+}
 function splat(gx,gy,rad,dye,fvx,fvy,radial){
   const sy=curSym();
   if(sy.n===1&&!sy.m){splat1(gx,gy,rad,dye,fvx,fvy,radial);return;}
@@ -513,7 +689,9 @@ function splat1(gx,gy,rad,dye,fvx,fvy,radial){
     const dx=i-gx, dy=j-gy, dist=Math.sqrt(dx*dx+dy*dy);
     if(dist>=rad)continue;
     const f=1-dist/rad;
-    if(dye){let fd=f*2.5;if(fd>1)fd=1;d[k]+=dye*fd;if(d[k]>1)d[k]=1;}
+    if(dye){let fd=f*2.5;if(fd>1)fd=1;
+      const add=dye*fd, old=d[k], tot=old+add, nd=tot>1?1:tot, sc=nd/tot;
+      cR[k]=(cR[k]+add*injCol[0])*sc; cG[k]=(cG[k]+add*injCol[1])*sc; cB[k]=(cB[k]+add*injCol[2])*sc; d[k]=nd;}
     u[k]+=fvx*f; v[k]+=fvy*f;
   }
   if(radial)source(gx,gy,radial);
@@ -550,7 +728,15 @@ function inject(ptr,tool,fl){
     const wv=c*amp*0.55*k;
     splat(wx,wy,2+fl*3,0.3+fl*0.4,ptr.vx*k*0.9+px*wv,ptr.vy*k*0.9+py*wv,1.1*fl*(0.4+settings.spread));
   }else if(tool==="stick"){
-    if(sp>0.02)splat(ptr.gx,ptr.gy,2.2,0,ptr.vx*k*0.75,ptr.vy*k*0.75,0);
+    const st=STICKS.find(x=>x.id===(ptr.stick||settings.stick))||STICKS[1];
+    if(sp>0.02)splat(ptr.gx,ptr.gy,st.r,0,ptr.vx*k*st.k,ptr.vy*k*st.k,0);
+  }else if(tool==="syrup"){
+    const w=ptr.syrupW||(SYRUP_W.find(x=>x.id===settings.syrupW)||SYRUP_W[1]).w;
+    const dx=ptr.gx-ptr.px, dy=ptr.gy-ptr.py, L=Math.hypot(dx,dy), n=Math.max(1,Math.ceil(L/0.6));
+    for(let m=1;m<=n;m++)splat(ptr.px+dx*m/n,ptr.py+dy*m/n,w,1,0,0,0);
+    if(L<0.01)splat(ptr.gx,ptr.gy,w*0.8,0.08,0,0,0);
+  }else if(tool==="top"){
+    if(dragTop>=0&&tops[dragTop]){tops[dragTop].x=ptr.gx;tops[dragTop].y=ptr.gy;}
   }else if(tool==="shake"){
     shake(ptr.gx,ptr.gy,fl);
   }else if(tool==="dot"){
@@ -575,7 +761,7 @@ const demo={on:false,segs:null,i:0,f:0,ptr:{down:false,gx:0,gy:0,px:0,py:0,vx:0,
 const demoBtn=document.getElementById("demoBtn");
 const toG=n=>C+n*HALF;
 function startDemo(){
-  freshCup();closeModal("resultModal");
+  freshCup();closeModal("resultModal");closePop();demo.liq=null;
   clearTimeout(autoTimer);demo.art=false;demo.sym=null;demo.spin=null;
   demo.segs=DEMOS[settings.target]||DEMOS.heart;demo.i=0;demo.f=0;demo.on=true;phase=0;
   demoBtn.textContent="Stop";demoBtn.classList.add("on");
@@ -599,7 +785,11 @@ function demoTick(){
   const dp=demo.ptr;
   if(sg.t==="wait"){dp.down=false;}
   else if(sg.t==="dot"){
+    injCol=liquid(sg.liq||demo.liq||defaultLiq()).c;
     splat(toG(sg.at[0]),toG(sg.at[1]),sg.r*HALF*0.9,1,0,0,sg.r*14);
+    demo.i++;demo.f=0;return;
+  }else if(sg.t==="top"){
+    dp.down=false;addTopping(sg.kind,toG(sg.at[0]),toG(sg.at[1]));
     demo.i++;demo.f=0;return;
   }else{
     const tt=sg.n>1?demo.f/(sg.n-1):1;
@@ -608,6 +798,9 @@ function demoTick(){
     const gx=toG(pt[0]), gy=toG(pt[1]);
     if(demo.f===0){const nb=path.length>1?path[1]:path[0];const ddx=nb[0]-path[0][0],ddy=nb[1]-path[0][1],dl=Math.hypot(ddx,ddy);Object.assign(dp,{gx,gy,px:gx,py:gy,vx:0,vy:0,dirx:dl?ddx/dl:1,diry:dl?ddy/dl:0});if(sg.t!=="wiggle")phase=0;}
     dp.gx=gx;dp.gy=gy;dp.down=true;
+    if(sg.t==="syrup"){injCol=syrupOf(sg.syr).c;dp.syrupW=sg.w||1.7;}
+    else injCol=liquid(sg.liq||demo.liq||defaultLiq()).c;
+    dp.stick=sg.stick||null;
     const keepW=settings.wamp;if(sg.amp!=null)settings.wamp=sg.amp;
     inject(dp,sg.t,sg.flow!=null?sg.flow:0.5);
     settings.wamp=keepW;
@@ -684,6 +877,27 @@ const RECIPES=[
     if(Math.random()<0.5){segs.push({t:"stick",path:[polar(0.85,a+1.57),polar(0.85,a+1.57+Math.PI)],n:40});}
     return {name:"Spin spiral",sym:"off",spin:sp,segs};
   },
+  function syrupFeather(){
+    const segs=[{t:"wait",n:10}],syr=pick(["choc","caramel","choc","white","straw"]),rows=rint(5,8),a=rnd(0,3.14),style=pick(["lines","spiral","rings"]);
+    if(Math.random()<0.5)segs.push({t:"pour",flow:0.9,a:[0,0],b:[0,0],n:rint(60,110)});
+    segs.push({t:"wait",n:8});
+    if(style==="lines"){
+      for(let n=0;n<rows;n++){const y=-0.66+n*(1.32/(rows-1));const hw=Math.sqrt(Math.max(0.02,0.72-y*y));const p=[rotP([-hw,y],a),rotP([hw,y],a)];if(n%2)p.reverse();segs.push({t:"syrup",syr,w:1.5,path:p,n:34});}
+      segs.push({t:"wait",n:8});
+      const cols=rint(4,7);
+      for(let n=0;n<cols;n++){const x=-0.62+n*(1.24/(cols-1));const hh=Math.sqrt(Math.max(0.02,0.72-x*x));const p=[rotP([x,-hh],a),rotP([x,hh],a)];if(n%2)p.reverse();segs.push({t:"stick",stick:"needle",path:p,n:26});}
+    }else if(style==="spiral"){
+      const p=[];for(let k=0;k<=120;k++){const tt=k/120,r=0.12+tt*0.72,an=a+tt*Math.PI*2*rint(2,3);p.push([Math.cos(an)*r,Math.sin(an)*r]);}
+      segs.push({t:"syrup",syr,w:1.2,path:p,n:150});segs.push({t:"wait",n:8});
+      const sp=rint(6,10);for(let k=0;k<sp;k++){const an=a+Math.PI*2*k/sp;const q=[[0,0],polar(0.86,an)];if(k%2)q.reverse();segs.push({t:"stick",stick:"needle",path:q,n:22});}
+    }else{
+      const rings=rint(3,5);for(let k=0;k<rings;k++)segs.push({t:"syrup",syr,w:1.4,path:circ(0.18+k*(0.62/(rings-1)),a,1,50),n:50});
+      segs.push({t:"wait",n:8});
+      const sp=rint(8,12);for(let k=0;k<sp;k++){const an=a+Math.PI*2*k/sp;segs.push({t:"stick",stick:"needle",path:[polar(0.86,an),[0,0]],n:22});}
+    }
+    const sy=SYRUPS.find(x=>x.id===syr);
+    return {name:sy.name+" "+(style==="lines"?"feather":style==="spiral"?"spiral web":"ring web"),sym:"off",spin:0,segs};
+  },
   function rosettaTrio(){
     const sym=pick(["spin3","k4"]),segs=[{t:"wait",n:10}],L=8,a=-Math.PI/2;
     for(let n=0;n<L;n++){const r=0.78-n*0.07;segs.push({t:"wiggle",flow:0.75-n*0.04,amp:0.25,path:[polar(r,a),polar(r-0.04,a)],n:12-Math.floor(n/2)});segs.push({t:"wait",n:3});}
@@ -697,7 +911,8 @@ function startArt(){
   if(demo.on)stopDemo();
   const rec=pick(RECIPES)();
   freshCup();closeModal("resultModal");
-  let extra=[];demo.garnish=null;
+  let extra=[];demo.garnish=null;demo.liq=null;
+  if(Math.random()<0.45){const lq=pick(LIQUIDS.filter(x=>x.id!==defaultLiq()&&!(settings.mode==="milk"&&(x.id==="espresso"||x.id==="ristretto"))));demo.liq=lq.id;rec.name=lq.name+" "+rec.name.charAt(0).toLowerCase()+rec.name.slice(1);}
   if(Math.random()<0.55){
     const gz=pick(GARNISHES);demo.garnish=gz.id;rec.name+=" with "+gz.name.toLowerCase();
     const style=pick(["ring","center","rim","scatter"]);
@@ -705,6 +920,16 @@ function startArt(){
     else if(style==="center")extra=[{t:"wait",n:20},{t:"shake",flow:0.6,a:[0,0],b:[0,0],n:30}];
     else if(style==="rim")extra=[{t:"wait",n:20},{t:"shake",flow:0.3,path:circ(0.86,0,1,48),n:80}];
     else extra=[{t:"wait",n:20},{t:"shake",flow:0.25,path:[[-0.6,-0.5],[0.6,-0.3],[-0.5,0.2],[0.55,0.55]],n:70}];
+  }
+  if(Math.random()<0.35){
+    const tp=pick(["whipcherry","cherry","cane","choc","mallow","cinnstar","mint"]);
+    if(tp==="whipcherry"){extra.push({t:"wait",n:16},{t:"top",kind:"whip",at:[0,0]},{t:"wait",n:10},{t:"top",kind:"cherry",at:[0.03,-0.05]});rec.name+=", whipped cream and a cherry";}
+    else if(tp==="cherry"){extra.push({t:"wait",n:16},{t:"top",kind:"cherry",at:[0,0]});rec.name+=", cherry on top";}
+    else if(tp==="cane"){extra.push({t:"wait",n:16},{t:"top",kind:"cane",at:polar(0.8,rnd(0,6.28))});rec.name+=", candy cane";}
+    else if(tp==="choc"){extra.push({t:"wait",n:16},{t:"top",kind:pick(["dchoc","wchoc"]),at:polar(rnd(0.5,0.75),rnd(0,6.28))},{t:"top",kind:"curls",at:[0,0]});rec.name+=", chocolate";}
+    else if(tp==="mallow"){extra.push({t:"wait",n:16},{t:"top",kind:"mallow",at:polar(0.4,rnd(0,6.28))});rec.name+=", marshmallows";}
+    else if(tp==="cinnstar"){extra.push({t:"wait",n:16},{t:"top",kind:"cinn",at:polar(0.62,rnd(0,6.28))},{t:"top",kind:"star",at:polar(0.6,rnd(0,6.28))});rec.name+=", cinnamon stick and star anise";}
+    else{extra.push({t:"wait",n:16},{t:"top",kind:"mint",at:polar(0.55,rnd(0,6.28))});rec.name+=", mint";}
   }
   demo.segs=rec.segs.concat(extra,[{t:"wait",n:40}]);demo.i=0;demo.f=0;demo.on=true;demo.art=true;demo.sym=rec.sym;demo.spin=rec.spin;phase=0;
   demoBtn.textContent="Stop";demoBtn.classList.add("on");
@@ -721,14 +946,6 @@ function buildSyms(){
   SYMS.forEach(x=>{const b=document.createElement("button");b.className="opt"+(x.id===settings.sym?" on":"");b.textContent=x.name;
     b.onclick=()=>{settings.sym=x.id;saveSettings();buildSyms();};sl.appendChild(b);});
 }
-function buildGarn(){
-  const gl=document.getElementById("garnList");gl.innerHTML="";
-  GARNISHES.forEach(g=>{const b=document.createElement("button");b.className="opt"+(g.id===settings.garnish?" on":"");b.textContent=g.name;
-    b.onclick=()=>{settings.garnish=g.id;saveSettings();buildGarn();
-      settings.tool="shake";document.querySelectorAll(".tool").forEach(x=>x.classList.toggle("on",x.dataset.tool==="shake"));};
-    gl.appendChild(b);});
-}
-buildGarn();
 buildSyms();
 demoBtn.onclick=()=>{
   if(demo.on){stopDemo();return;}
@@ -737,7 +954,7 @@ demoBtn.onclick=()=>{
 
 function loop(){
   if(demo.on)demoTick();
-  else if(ptr.down)inject(ptr,settings.tool,settings.flow);
+  else if(ptr.down){setInjColor();inject(ptr,activeTool(),settings.flow);}
   pouringNow=demo.on?demo.ptr.down:ptr.down;
   step();
   draw();
@@ -813,7 +1030,7 @@ function finish(){
     const cov=coverage();
     entry={ts:Date.now(),target:"free",mode:m.id,score:null,cover:cov,thumb:snap};
     document.getElementById("resScore").textContent=cov+"%";
-    document.getElementById("resGrade").textContent="of the cup covered in "+m.topName;
+    document.getElementById("resGrade").textContent="of the cup covered in your pour";
     document.getElementById("resTitle").textContent="Free pour";
   }
   document.getElementById("resImg").src=snap;
@@ -853,7 +1070,7 @@ function updateStatus(){
   }
   document.getElementById("status").textContent=txt;
 }
-function freshCup(){u.fill(0);v.fill(0);u0.fill(0);v0.fill(0);d.fill(0);d0.fill(0);pCount=0;pHead=0;}
+function freshCup(){u.fill(0);v.fill(0);u0.fill(0);v0.fill(0);d.fill(0);d0.fill(0);cR.fill(0);cG.fill(0);cB.fill(0);pCount=0;pHead=0;tops.length=0;dragTop=-1;}
 
 /* ui */
 function openModal(id){document.getElementById(id).classList.add("open");}
@@ -872,7 +1089,7 @@ function buildMenus(){
   const ml=document.getElementById("modeList");ml.innerHTML="";
   MODES.forEach(m=>{
     const b=document.createElement("button");b.className="opt"+(m.id===settings.mode?" on":"");b.textContent=m.name;
-    b.onclick=()=>{if(settings.mode!==m.id){stopDemo();settings.mode=m.id;freshCup();saveSettings();buildMenus();updateStatus();}};
+    b.onclick=()=>{if(settings.mode!==m.id){stopDemo();settings.mode=m.id;freshCup();saveSettings();buildMenus();updateStatus();refreshTools();}};
     ml.appendChild(b);
   });
   const tl=document.getElementById("targetList");tl.innerHTML="";
@@ -882,10 +1099,76 @@ function buildMenus(){
     tl.appendChild(b);
   });
 }
+/* paint style toolbar: every tool opens its own drop down */
+function activeTool(){return settings.tool==="pour"?settings.pourStyle:settings.tool;}
+function setInjColor(){injCol=settings.tool==="syrup"?syrupOf(settings.syrup).c:liquid(curLiquidId()).c;}
+const pop=document.getElementById("pop");let popFor=null;
+function rgb(c){return "rgb("+c[0]+","+c[1]+","+c[2]+")";}
+function closePop(){pop.classList.remove("open");popFor=null;}
+function refreshTools(){
+  document.querySelectorAll(".tool").forEach(b=>{
+    const t=b.dataset.tool;b.classList.toggle("on",t===settings.tool);
+    const sw=b.querySelector(".sw");let c="transparent";
+    if(t==="pour")c=rgb(liquid(curLiquidId()).c);
+    else if(t==="syrup")c=rgb(syrupOf(settings.syrup).c);
+    else if(t==="shake"){const g=GARNISHES.find(x=>x.id===settings.garnish)||GARNISHES[0];c=g.cols[0];}
+    else if(t==="top"){c=(TOPPINGS.find(x=>x.id===settings.topping)||TOPPINGS[0]).c;}
+    else if(t==="stick")c="#1e6fd9";
+    sw.style.background=c;sw.style.boxShadow=c==="#ffffff"||c==="#fbfbf7"?"inset 0 0 0 1px #cbbfae":"none";
+  });
+}
+function chip(label,color,on,fn){
+  const b=document.createElement("button");b.className="ch"+(on?" on":"");
+  if(color){const i=document.createElement("i");i.style.background=color;b.appendChild(i);}
+  b.appendChild(document.createTextNode(label));b.onclick=fn;return b;
+}
+function section(title){const h=document.createElement("h4");h.textContent=title;pop.appendChild(h);const g=document.createElement("div");g.className="grid";pop.appendChild(g);return g;}
+function buildPop(tool){
+  pop.innerHTML="";
+  const pick1=(fn)=>()=>{fn();saveSettings();refreshTools();closePop();};
+  if(tool==="pour"){
+    let g=section("LIQUID");
+    LIQUIDS.forEach(l=>g.appendChild(chip(l.name,rgb(l.c),l.id===curLiquidId(),pick1(()=>{if(settings.mode==="milk")settings.liqMilk=l.id;else settings.liqEsp=l.id;}))));
+    g=section("STYLE");
+    POUR_STYLES.forEach(p=>g.appendChild(chip(p.name,null,p.id===settings.pourStyle,pick1(()=>{settings.pourStyle=p.id;}))));
+  }else if(tool==="stick"){
+    const g=section("ETCHING TOOL");
+    STICKS.forEach(p=>g.appendChild(chip(p.name,null,p.id===settings.stick,()=>{settings.stick=p.id;saveSettings();refreshTools();closePop();})));
+  }else if(tool==="syrup"){
+    let g=section("SYRUP");
+    SYRUPS.forEach(p=>g.appendChild(chip(p.name,rgb(p.c),p.id===settings.syrup,pick1(()=>{settings.syrup=p.id;}))));
+    g=section("LINE");
+    SYRUP_W.forEach(p=>g.appendChild(chip(p.name,null,p.id===settings.syrupW,pick1(()=>{settings.syrupW=p.id;}))));
+  }else if(tool==="shake"){
+    const g=section("GARNISH");
+    GARNISHES.forEach(p=>g.appendChild(chip(p.name,p.cols[0],p.id===settings.garnish,()=>{settings.garnish=p.id;saveSettings();refreshTools();closePop();})));
+  }else if(tool==="top"){
+    const g=section("TOPPING");
+    TOPPINGS.forEach(p=>g.appendChild(chip(p.name,p.c,p.id===settings.topping,()=>{settings.topping=p.id;saveSettings();refreshTools();closePop();})));
+    const h=document.createElement("div");h.style.cssText="font-size:12px;color:var(--soft);padding:2px";
+    h.textContent="Tap the cup to drop it, drag before you let go to slide it into place.";pop.appendChild(h);
+  }
+}
+function openPop(tool){
+  buildPop(tool);popFor=tool;
+  const row=document.querySelector(".row.tools").getBoundingClientRect(), app=document.getElementById("app").getBoundingClientRect();
+  pop.style.left=(app.left+8)+"px";pop.style.width=(app.width-16)+"px";
+  pop.style.bottom=(window.innerHeight-row.top+6)+"px";
+  pop.classList.add("open");
+}
 document.querySelectorAll(".tool").forEach(b=>{
-  b.classList.toggle("on",b.dataset.tool===settings.tool);
-  b.onclick=()=>{settings.tool=b.dataset.tool;document.querySelectorAll(".tool").forEach(x=>x.classList.toggle("on",x===b));saveSettings();};
+  b.onclick=()=>{
+    const t=b.dataset.tool;
+    if(popFor===t){closePop();return;}
+    settings.tool=t;saveSettings();refreshTools();openPop(t);
+  };
 });
+document.addEventListener("pointerdown",e=>{
+  if(!pop.classList.contains("open"))return;
+  if(pop.contains(e.target)||e.target.closest(".tool"))return;
+  closePop();
+},true);
+refreshTools();
 function bindRange(id,key){
   const el=document.getElementById(id);el.value=Math.round(settings[key]*100);
   el.oninput=()=>{settings[key]=el.value/100;saveSettings();};
