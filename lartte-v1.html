@@ -21,6 +21,20 @@ h1 b{color:var(--blue)}
 #tabs button{flex:1;border-radius:10px;border:2px solid var(--line);background:#fff;font-weight:800;font-size:15px;color:var(--ink)}
 #tabs button b{color:var(--blue)}
 #tabs button.on{border-color:var(--blue);background:var(--blue2);color:var(--blue)}
+#ticket{position:absolute;left:10px;right:10px;top:6px;z-index:5;display:none;background:rgba(255,253,249,0.96);border:2px solid var(--blue);border-radius:12px;padding:6px 10px;box-shadow:0 4px 14px rgba(0,0,0,.12);cursor:pointer}
+#ticket.open{display:block}
+#ticket.vip{border-color:#d4a017;background:linear-gradient(90deg,#fff8e1,#fffdf9 60%,#e8f1fd)}
+#ticket .who{font-size:11px;font-weight:800;color:var(--blue);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#ticket.vip .who{color:#a87800}
+#ticket .dn{font-size:14px;font-weight:800;line-height:1.2;max-height:2.4em;overflow:hidden}
+#ticket .row2{display:flex;align-items:center;gap:8px;margin-top:4px}
+#ticket .bar{flex:1;height:7px;border-radius:4px;background:#e4dccf;overflow:hidden}
+#ticket .bar i{display:block;height:100%;width:100%;background:var(--blue)}
+#ticket .tm{font-size:12px;font-weight:800;width:86px;text-align:right}
+#toast{position:absolute;left:16px;right:16px;bottom:10px;z-index:6;display:none;background:#3b2a1e;color:#fff;border-radius:12px;padding:10px 12px;font-size:13px;font-weight:600;text-align:center;border-bottom:3px solid var(--blue)}
+#toast.open{display:block}
+.oi{padding:9px 4px;border-bottom:1px solid var(--line);font-size:14px;font-weight:600}
+.oi.ok{color:#2e8b4a}
 #stage{flex:1 1 auto;display:flex;align-items:center;justify-content:center;min-height:0;position:relative}
 #cv{touch-action:none;display:block}
 #status{height:24px;flex:0 0 24px;line-height:24px;text-align:center;font-size:13px;color:var(--soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 10px}
@@ -94,7 +108,10 @@ details[open] summary::after{content:"\25B4"}
     <button id="demoBtn">Demo</button>
   </header>
   <div id="tabs"><button data-view="latte">l<b>ART</b>te</button><button data-view="chino"><b>ART</b>chino</button></div>
-  <div id="stage"><canvas id="cv"></canvas></div>
+  <div id="stage"><canvas id="cv"></canvas>
+    <div id="ticket"><div class="who"></div><div class="dn"></div><div class="row2"><div class="bar"><i></i></div><div class="tm"></div></div></div>
+    <div id="toast"></div>
+  </div>
   <div id="status">Pick a tool and pour</div>
   <div class="row tools">
     <button class="tool on" data-tool="pour">Pour<span class="car">&#9662;</span><span class="sw"></span></button>
@@ -132,6 +149,18 @@ details[open] summary::after{content:"\25B4"}
     </div>
   </details>
   <details open>
+    <summary>Game mode</summary>
+    <div class="sect" id="modeGame"></div>
+  </details>
+  <details>
+    <summary>Phone sensors and sound</summary>
+    <div class="sect">
+      <label class="tog"><input type="checkbox" id="tiltPour"> Tilt the phone sideways to pour harder</label>
+      <label class="tog"><input type="checkbox" id="shakeDust"> Shake the phone to dust garnish, or to blend in ARTchino</label>
+      <label class="tog"><input type="checkbox" id="soundOn"> Sound</label>
+    </div>
+  </details>
+  <details>
     <summary>Art generator</summary>
     <div class="sect">
       <button class="opt on" id="genBtn">Generate art</button>
@@ -182,8 +211,15 @@ details[open] summary::after{content:"\25B4"}
       <div class="score" id="resScore"></div>
       <div class="grade" id="resGrade"></div>
       <div class="btns" style="margin-bottom:8px"><button class="primary" id="resSave">Save image to phone</button></div>
-      <div class="btns"><button data-close="resultModal">Keep pouring</button><button id="resFresh">Fresh cup</button></div>
+      <div class="btns" id="resBtns"></div>
     </div>
+  </div>
+</div>
+
+<div class="modal" id="orderModal">
+  <div class="card">
+    <div class="hd"><h3 id="orderTitle">Order</h3><button class="x" data-close="orderModal">&times;</button></div>
+    <div class="bd"><div id="orderWho" style="color:var(--soft);font-size:13px;margin-bottom:8px"></div><div id="orderList"></div></div>
   </div>
 </div>
 
@@ -509,8 +545,8 @@ let artFresh=false,artTitle="";
 function resetMade(){made.liqs.clear();made.syr.clear();made.garn.clear();made.tops.clear();artFresh=false;}
 let noteTimer=null;
 function noteChange(){clearTimeout(noteTimer);noteTimer=setTimeout(()=>{if(!demo.on)updateStatus();},120);}
-function drinkName(){
-  const L=made.liqs,Y=made.syr,G=made.garn,T=made.tops,milk=settings.mode==="milk";
+function drinkName(){return drinkNameFrom(made.liqs,made.syr,made.garn,made.tops,settings.mode==="milk");}
+function drinkNameFrom(L,Y,G,T,milk){
   const choc=L.has("choc")||Y.has("choc")||G.has("cocoa")||T.has("dchoc")||T.has("curls");
   const white=L.has("white")||Y.has("white")||T.has("wchoc");
   const caramel=L.has("caramel")||Y.has("caramel");
@@ -643,6 +679,7 @@ function addTopping(kind,gx,gy,size){
   });
   while(tops.length>60)tops.shift();
   made.tops.add(kind);noteChange();
+  if(typeof sfxPlop==="function")sfxPlop();
   return list;
 }
 function dragToppings(list,gx,gy){
@@ -1069,16 +1106,25 @@ function buildSyms(){
 }
 buildSyms();
 demoBtn.onclick=()=>{
+  if(gameOn()){endGame(true);return;}
   if(settings.view!=="chino"&&demo.on){stopDemo();return;}
   if(settings.view==="chino"){if(chDemo.on)chStopDemo();else chStartDemo();return;}
   if(settings.target==="free")startArt();else startDemo();
 };
 
 function loop(){
+  gameTick();
   if(settings.view==="chino"){
     if(chDemo.on)chDemoTick();else if(ptr.down)chPointerHold();
-    chStep();chRender(ctx);requestAnimationFrame(loop);return;
+    chStep();chRender(ctx);
+    const sgx=chDemo.on&&chDemo.segs?chDemo.segs[chDemo.i]:null;
+    const bl=(ptr.down&&settings.chTool==="blend")?settings.chBlend:(sgx&&sgx.t==="blend"?sgx.id:null);
+    const icyB=bl&&blendOf(bl).icy&&chFill()<0.97;
+    sfxFrame(!!bl&&!icyB&&chFill()<0.97,!!icyB,0.14);
+    requestAnimationFrame(loop);return;
   }
+  {const at=activeTool();const pr=(ptr.down&&!demo.on&&(at==="pour"||at==="wiggle"||at==="dot"||at==="syrup"))||(demo.on&&demo.ptr.down&&demo.segs&&demo.segs[demo.i]&&demo.segs[demo.i].t!=="stick");
+   sfxFrame(pr,false,at==="syrup"&&!demo.on?0.07:0.16);}
   if(demo.on)demoTick();
   else if(ptr.down){setInjColor();inject(ptr,activeTool(),settings.flow);}
   pouringNow=demo.on?demo.ptr.down:ptr.down;
@@ -1152,7 +1198,7 @@ function chFinish(){
   document.getElementById("resGrade").textContent=chAny()?"Built layer by layer":"An empty cup, bold choice";
   document.getElementById("resImg").src=snap;
   const l=loadLog();l.unshift({ts:Date.now(),target:"chino",mode:"chino",score:null,cover:null,thumb:snap,name:dn});while(l.length>80)l.pop();saveLog(l);
-  openModal("resultModal");
+  setResultButtons("free");openModal("resultModal");
 }
 function finish(){
   renderLiquid();
@@ -1176,7 +1222,7 @@ function finish(){
   document.getElementById("resImg").src=snap;
   const l=loadLog();l.unshift(entry);while(l.length>80)l.pop();saveLog(l);
   updateStatus();
-  openModal("resultModal");
+  setResultButtons("free");openModal("resultModal");
 }
 function renderLog(){
   const l=loadLog(), best={};
@@ -1201,6 +1247,12 @@ function renderLog(){
   });
 }
 function updateStatus(){
+  if(typeof game!=="undefined"&&gameOn()){
+    document.getElementById("chip").textContent=game.mode==="shift"?"Tips $"+game.tips.toFixed(2):"Time attack";
+    const any=settings.view==="chino"?chAny():(made.liqs.size||made.syr.size||made.garn.size||made.tops.size);
+    document.getElementById("status").textContent=any?"Making: "+(settings.view==="chino"?chName():drinkName()):"Tap the ticket to see the order";
+    return;
+  }
   if(settings.view==="chino"){
     document.getElementById("chip").textContent="ARTchino";
     document.getElementById("status").textContent=chArtFresh&&chArtTitle?chArtTitle:(chAny()?chName():"Pick a blend and hold on the cup to fill it");
@@ -1349,9 +1401,9 @@ bindRange("flow","flow");bindRange("spin","spin");bindRange("spread","spread");b
 const gh=document.getElementById("ghost");gh.checked=settings.ghost;
 gh.onchange=()=>{settings.ghost=gh.checked;saveSettings();};
 document.getElementById("clearBtn").onclick=()=>{clearTimeout(autoTimer);if(settings.view==="chino"){chStopDemo();chReset();updateStatus();return;}stopDemo();freshCup();};
-document.getElementById("finishBtn").onclick=()=>{clearTimeout(autoTimer);if(settings.view==="chino"){chStopDemo();chFinish();return;}stopDemo();finish();};
+document.getElementById("finishBtn").onclick=()=>{clearTimeout(autoTimer);if(gameOn()){stopDemo();chStopDemo();gameServe();return;}if(settings.view==="chino"){chStopDemo();chFinish();return;}stopDemo();finish();};
 document.getElementById("resSave").onclick=saveImage;
-document.getElementById("resFresh").onclick=()=>{freshCup();closeModal("resultModal");};
+
 document.getElementById("logBtn").onclick=()=>{renderLog();openModal("logModal");};
 document.getElementById("menuLog").onclick=()=>{closeMenu();renderLog();openModal("logModal");};
 let wipeArmed=false;
@@ -1374,6 +1426,7 @@ const BLENDS=[
   {id:"ube",name:"Ube",word:"Ube",c:[166,124,204],spk:"#6a4a92",dens:0.4,icy:1},
   {id:"blue",name:"Blue spirulina",word:"Blue Moon",c:[110,168,234],spk:"#2f6fc4",dens:0.4,icy:1},
   {id:"coldbrew",name:"Cold brew",word:"Cold Brew",c:[70,38,20],spk:"#3a1f0f",dens:0,icy:0},
+  {id:"espresso",name:"Iced espresso",word:"Espresso",c:[92,52,28],spk:"#3a1f0f",dens:0,icy:0},
   {id:"milk",name:"Cold milk",word:"Milk",c:[248,246,240],spk:"#e6e1d6",dens:0,icy:0}
 ];
 const ADDINS=[
@@ -1439,6 +1492,7 @@ function chAddin(id,x){
   ch.pieces.push({id,x,y:g.topY-r*2,vy:0,r:r*(0.85+Math.random()*0.3),rest:false,rot:Math.random()*6,seed:Math.random()*1000});
   ch.used.add.add(id);
   if(ch.pieces.length>420)ch.pieces.shift();
+  if(typeof sfxClink==="function"&&Math.random()<0.6){id==="ice"?sfxClink():sfxPlop();}
 }
 function chDrizzlePoint(x,y,syr,start){
   const g=chGeo();
@@ -1463,7 +1517,7 @@ function chPlaceTop(kind,x,y){
   if(kind==="lid"){ch.lid=true;return null;}
   if(kind==="cherry"&&ch.whip>0.05&&Math.abs(x-g.cx)<g.topHalf*0.6){const ty=chWhipTopY(g,g.cx);x=g.cx+(x-g.cx)*0.25;y=(ty||g.topY)-Wc*0.03;}
   const t={kind,x,y,rot:(Math.random()-0.5)*0.6,seed:Math.random()*1000};
-  ch.tops.push(t);return t;
+  ch.tops.push(t);if(typeof sfxPlop==="function")sfxPlop();return t;
 }
 function chDust(gid,x){
   const g=chGeo(),gi=Math.max(0,GARNISHES.findIndex(q=>q.id===gid)),G2=GARNISHES[gi];
@@ -1657,20 +1711,38 @@ function chDrawTop(c2,t,g){
 /* naming */
 function chName(){
   const vol={};for(const l of ch.layers)vol[l.id]=(vol[l.id]||0)+l.h;
-  const ids=Object.keys(vol).sort((a,b)=>vol[b]-vol[a]).slice(0,2);
+  return chNameFrom({vol,syr:ch.used.syr,tops:ch.used.tops,dust:ch.used.dust,add:ch.used.add,whip:ch.whip>0.05?ch.whipKind:null});
+}
+function chNameFrom(sp){
+  const all=Object.keys(sp.vol).filter(k=>sp.vol[k]>0.02).sort((a,b)=>sp.vol[b]-sp.vol[a]);
+  const icy=all.some(id=>blendOf(id).icy)||!all.length;
+  const ids=all.slice(0,2);
   const w=[];
   const syrW={choc:"Chocolate",caramel:"Caramel",white:"White Chocolate",straw:"Strawberry",blueb:"Blueberry",honey:"Honey"};
-  ch.used.syr.forEach(id=>{const word=syrW[id];if(word&&!ids.some(b=>blendOf(b).word.indexOf(word)>=0))w.push(word==="Caramel"&&ids.indexOf("caramel")>=0?"Double Caramel":word);});
-  ch.used.tops.forEach(id=>{const t=CH_TOPS.find(x=>x.id===id);if(t&&t.word&&id!=="cherry"&&id!=="cookie"&&id!=="wafer"&&w.indexOf(t.word)<0)w.push(t.word);});
-  ch.used.dust.forEach(id=>{const m={cinnamon:"Cinnamon",nutmeg:"Nutmeg",cocoa:"Cocoa",salt:"Sea Salt",sugar:"Sugar Plum",matcha:"Matcha",sprinkles:"Birthday Cake"}[id];if(m&&w.indexOf(m)<0)w.push(m);});
-  ids.forEach(b=>{const word=blendOf(b).word;if(word!=="Milk"&&w.indexOf(word)<0)w.push(word);});
-  if(!w.length)w.push(ids.length?blendOf(ids[0]).word:"Mystery");
-  let name=(w.length>5?"Kitchen Sink":w.join(" "))+" ARTchino";
-  const extras=[];ch.used.add.forEach(id=>extras.push(addinOf(id).word));
-  if(ch.used.tops.has("cookie"))extras.push("a Cookie");if(ch.used.tops.has("wafer"))extras.push("a Wafer Roll");
+  sp.syr.forEach(id=>{const word=syrW[id];if(word&&!ids.some(b=>blendOf(b).word.indexOf(word)>=0))w.push(word==="Caramel"&&ids.indexOf("caramel")>=0?"Double Caramel":word);});
+  if(!icy){const ix=w.indexOf("Chocolate");if(ix>=0)w.splice(ix,1,"__mocha");const iw=w.indexOf("White Chocolate");if(iw>=0)w.splice(iw,1,"__wmocha");}
+  sp.tops.forEach(id=>{const t=CH_TOPS.find(x=>x.id===id);if(t&&t.word&&id!=="cherry"&&id!=="cookie"&&id!=="wafer"&&w.indexOf(t.word)<0)w.push(t.word);});
+  sp.dust.forEach(id=>{const m={cinnamon:"Cinnamon",nutmeg:"Nutmeg",cocoa:"Cocoa",salt:"Sea Salt",sugar:"Sugar Plum",matcha:"Matcha",sprinkles:"Birthday Cake"}[id];if(m&&w.indexOf(m)<0)w.push(m);});
+  let name;
+  if(icy){
+    ids.forEach(b=>{const word=blendOf(b).word;if(word!=="Milk"&&w.indexOf(word)<0)w.push(word);});
+    if(!w.length)w.push(ids.length?blendOf(ids[0]).word:"Mystery");
+    name=(w.length>5?"Kitchen Sink":w.join(" "))+" ARTchino";
+  }else{
+    /* not blended: an iced drink built over ice */
+    const cb=all.includes("coldbrew"),esp=all.includes("espresso"),milk=all.includes("milk");
+    const mocha=w.indexOf("__mocha")>=0,wm=w.indexOf("__wmocha")>=0;
+    const fw=w.filter(x=>x!=="__mocha"&&x!=="__wmocha");
+    let core=cb?(milk?"Cold Brew Latte":"Cold Brew"):esp?(milk?(mocha&&wm?"Tuxedo Mocha":mocha?"Mocha":wm?"White Mocha":"Latte"):"Espresso"):"Milk";
+    if(!esp&&!cb&&(mocha||wm))core=mocha?"Chocolate Milk":"White Chocolate Milk";
+    if(cb&&(mocha||wm))fw.unshift(mocha?"Mocha":"White Mocha");
+    name="Iced "+(fw.length>5?"Kitchen Sink ":(fw.length?fw.join(" ")+" ":""))+core;
+  }
+  const extras=[];sp.add.forEach(id=>{if(icy||id!=="ice")extras.push(addinOf(id).word);});
+  if(sp.tops.has("cookie"))extras.push("a Cookie");if(sp.tops.has("wafer"))extras.push("a Wafer Roll");
   if(extras.length)name+=" with "+(extras.length>1?extras.slice(0,-1).join(", ")+" and "+extras[extras.length-1]:extras[0]);
-  if(ch.whip>0.05){const W=whipOf(ch.whipKind);name+=W.id==="classic"?" con Panna":(" under "+W.word);}
-  if(ch.used.tops.has("cherry"))name+=", Cherry on Top";
+  if(sp.whip){const W=whipOf(sp.whip);name+=W.id==="classic"?" con Panna":(icy?" under ":" topped with ")+W.word;}
+  if(sp.tops.has("cherry"))name+=", Cherry on Top";
   return name;
 }
 function chAny(){return ch.layers.length||ch.pieces.length||ch.strokes.length||ch.whip>0.01||ch.tops.length||ch.dust.length||ch.straw||ch.lid;}
@@ -1747,6 +1819,310 @@ function chPointerHold(){
 }
 function chUp(){ch.drag=null;ch.stroke=null;noteChange();}
 
+/* ===================== Coffee shop: customers, VIPs, timers, time attack ===================== */
+const CUSTOMERS=["Trucker Dale","Yoga Brenda","Night Shift Nurse","Tourist in Socks","Guy in a Fedora","Desert Rat Pete","Influencer Kaylee","Locksmith Larry","Grandma Rose","Skater Kid","Cowboy Jim","Real Estate Tammy","Sleepy Student","Gym Bro Chad","Retired Pilot","Lineman Gus","Bird Watcher Ann","Delivery Driver","Poker Dealer","Wedding Planner","Ghost Hunter Phil","Mall Walker Bev"];
+const VIPS=["The Food Critic","The Regional Manager","A Coffee Influencer","The Mayor's Cousin","A Barista Champion","The Health Inspector","A Celebrity Chef","The Owner's Mom"];
+const VIP_GRIPES=["I can taste the shortcuts.","My usual barista would never.","This is going in my review.","I asked for craft, not chaos.","Did you even look at the order?","I'll be speaking to the owner.","The foam has no soul.","Charming. Truly. No."];
+const HAPPY=["Oh that's perfect!","You nailed it.","Tell your boss you deserve a raise.","This is going on my story.","Exactly how I like it.","Chef's kiss."];
+const MEH=["It's fine, I guess.","Close enough.","Not bad, not great.","I'll drink it.","Kind of what I asked for."];
+const MAD=["That's not what I ordered.","Is this a joke?","I'm never coming back.","What even is this?","Did you hear me at all?"];
+
+const HOT_MENU=[
+  {liq:["milk"]},{liq:["choc"]},{liq:["milk"],syr:["caramel"]},{liq:["white"]},{liq:["choc"],syr:["white"]},
+  {liq:["matcha"]},{liq:["matcha","espresso"]},{liq:["milk"],garn:["cinnamon","nutmeg"]},{liq:["milk"],garn:["cinnamon"]},
+  {liq:["choc"],top:["cane","whip"]},{liq:["choc"],top:["cherry"]},{liq:["caramel"],garn:["salt"]},{liq:["milk"],syr:["honey"]},
+  {liq:["straw"]},{liq:["blue"]},{liq:["ube"]},{liq:["choc"],top:["mallow"]},{liq:["milk"],garn:["sprinkles"]},
+  {liq:["milk"],top:["star"],garn:["cinnamon"]},{liq:["choc"],top:["mint"]},{liq:["milk"],top:["whip"]},{liq:["caramel"],syr:["caramel"]}
+];
+const ICED_MENU=[
+  {blend:["espresso","milk"]},{blend:["espresso","milk"],syr:["caramel"]},{blend:["espresso","milk"],syr:["choc"]},
+  {blend:["espresso","milk"],syr:["white"]},{blend:["espresso","milk"],syr:["honey"]},{blend:["espresso","milk"],syr:["straw"]},
+  {blend:["coldbrew"]},{blend:["coldbrew"],whip:"coldfoam"},{blend:["coldbrew","milk"]},{blend:["espresso","milk"],add:["boba"]},
+  {blend:["espresso","milk"],syr:["blueb"]},{blend:["coldbrew"],syr:["caramel"],whip:"coldfoam"}
+];
+const ART_ORDERS=["heart","tulip","rosetta","monk"];
+Object.assign(settings,Object.assign({tiltPour:false,shakeDust:false,sound:true},settings));
+
+const game={mode:"free",order:null,tips:0,served:0,walkouts:0,points:0,idx:0,runStart:0,waiting:false,results:[]};
+function gameOn(){return game.mode!=="free";}
+
+function makeOrder(){
+  const vip=game.served>=2&&Math.random()<0.22;
+  const style=pick(["hot","hot","iced","blended","blended"]);
+  const o={style,vip,who:vip?pick(VIPS):pick(CUSTOMERS),req:[],art:null};
+  if(style==="hot"){
+    const m=pick(HOT_MENU);
+    (m.liq||[]).forEach(x=>o.req.push("liq:"+x));(m.syr||[]).forEach(x=>o.req.push("syr:"+x));
+    (m.garn||[]).forEach(x=>o.req.push("garn:"+x));(m.top||[]).forEach(x=>o.req.push("top:"+x));
+    if(vip||Math.random()<0.65)o.art=vip?pick(["rosetta","tulip","heart"]):pick(ART_ORDERS);
+    o.name=drinkNameFrom(new Set(m.liq||[]),new Set(m.syr||[]),new Set(m.garn||[]),new Set(m.top||[]),true)+(o.art?" with a "+TARGETS.find(t=>t.id===o.art).name.toLowerCase():"");
+    o.patience=vip?55:75;
+  }else if(style==="iced"){
+    const m=pick(ICED_MENU),vol={};
+    m.blend.forEach(b=>{o.req.push("blend:"+b);vol[b]=0.4;});o.req.push("add:ice");
+    (m.syr||[]).forEach(x=>o.req.push("syr:"+x));(m.add||[]).forEach(x=>o.req.push("add:"+x));
+    if(m.whip)o.req.push("whip:"+m.whip);
+    o.name=chNameFrom({vol,syr:new Set(m.syr||[]),tops:new Set(),dust:new Set(),add:new Set(["ice"].concat(m.add||[])),whip:m.whip||null});
+    o.patience=vip?40:55;
+  }else{
+    const icy=BLENDS.filter(b=>b.icy),b1=pick(icy),vol={};vol[b1.id]=0.5;o.req.push("blend:"+b1.id);
+    if(Math.random()<0.35){const b2=pick(icy.filter(b=>b.id!==b1.id));vol[b2.id]=0.3;o.req.push("blend:"+b2.id);}
+    const add=new Set(),syr=new Set(),tops=new Set(),dust=new Set();let whip=null;
+    if(Math.random()<0.45){const a=pick(ADDINS.filter(x=>x.id!=="ice"));add.add(a.id);o.req.push("add:"+a.id);}
+    if(Math.random()<0.6){const s2=pick(SYRUPS);syr.add(s2.id);o.req.push("syr:"+s2.id);}
+    if(Math.random()<0.75||vip){whip=Math.random()<0.7?"classic":pick(WHIPS.filter(w=>w.id!=="coldfoam")).id;o.req.push("whip:"+whip);}
+    if(whip&&(Math.random()<0.5||vip)){const t=Math.random()<0.6?"cherry":pick(["wafer","cane","cookie","mint","dchoc"]);tops.add(t);o.req.push("top:"+t);}
+    if(whip&&Math.random()<0.3){const g2=pick(GARNISHES);dust.add(g2.id);o.req.push("dust:"+g2.id);}
+    o.name=chNameFrom({vol,syr,tops,dust,add,whip});
+    o.patience=vip?70:90;
+  }
+  return o;
+}
+function reqLabel(k){
+  const [c,id]=k.split(":");
+  if(c==="liq")return "Pour "+liquid(id).name.toLowerCase();
+  if(c==="syr")return (settingsViewFor(game.order)==="chino"?"Drizzle ":"Syrup ")+syrupOf(id).name.toLowerCase();
+  if(c==="garn"||c==="dust")return "Dust "+((GARNISHES.find(g=>g.id===id)||{name:id}).name).toLowerCase();
+  if(c==="top"){const t=(TOPPINGS.find(x=>x.id===id)||CH_TOPS.find(x=>x.id===id));return "Top with "+(t?t.name.toLowerCase():id);}
+  if(c==="blend")return (blendOf(id).icy?"Blend ":"Pour ")+blendOf(id).name.toLowerCase();
+  if(c==="add")return "Add "+addinOf(id).name.toLowerCase();
+  if(c==="whip")return whipOf(id).name;
+  return k;
+}
+function settingsViewFor(o){return o&&o.style==="hot"?"latte":"chino";}
+function madeKeys(o){
+  const K=new Set();
+  if(o.style==="hot"){made.liqs.forEach(x=>K.add("liq:"+x));made.syr.forEach(x=>K.add("syr:"+x));made.garn.forEach(x=>K.add("garn:"+x));made.tops.forEach(x=>K.add("top:"+x));}
+  else{
+    const vol={};for(const l of ch.layers)vol[l.id]=(vol[l.id]||0)+l.h;
+    Object.keys(vol).forEach(b=>{if(vol[b]>0.03)K.add("blend:"+b);});
+    ch.used.add.forEach(x=>K.add("add:"+x));ch.used.syr.forEach(x=>K.add("syr:"+x));ch.used.dust.forEach(x=>K.add("dust:"+x));
+    ch.used.tops.forEach(x=>{if(x!=="straw"&&x!=="lid")K.add("top:"+x);});
+    if(ch.whip>0.15)K.add("whip:"+ch.whipKind);
+  }
+  return K;
+}
+function gradeOrder(o,secs){
+  const K=madeKeys(o),R=new Set(o.req);
+  const hit=o.req.filter(k=>K.has(k)),miss=o.req.filter(k=>!K.has(k)),extra=[...K].filter(k=>!R.has(k));
+  let q=hit.length/Math.max(1,o.req.length)*60-extra.length*(o.vip?14:7);
+  const notes=[];
+  if(o.style==="hot"){
+    if(o.art){const sc=computeScore();q+=sc*0.4;notes.push(TARGETS.find(t=>t.id===o.art).name+" art "+sc);if(o.vip&&sc<45){q-=15;notes.push("VIP wanted cleaner art");}}
+    else{const cv2=coverage();q+=Math.min(40,cv2*1.3);if(cv2<12)notes.push("barely any pour on top");}
+  }else{
+    const f=chFill();q+=Math.min(30,f*34);if(f<0.7){q-=12;notes.push("cup not full");}
+    if(o.req.some(k=>k.startsWith("whip:"))&&!o.req.includes("whip:coldfoam")){if(ch.whip<0.35){q-=8;notes.push("whip is skimpy");}else q+=10;}else if(hit.length)q+=10;
+  }
+  const left=Math.max(0,o.patience-secs);q+=game.mode==="shift"?left/o.patience*12:0;
+  q=Math.round(Math.max(0,Math.min(100,q)));
+  return {q,hit,miss,extra,notes,secs};
+}
+function starsFor(q,vip){const v=Math.max(0,q-(vip?12:0));return v>=88?5:v>=72?4:v>=55?3:v>=35?2:1;}
+function starStr(n){return "★".repeat(n)+"☆".repeat(5-n);}
+
+/* ticket overlay */
+const ticket=document.getElementById("ticket");
+function startGame(mode){
+  stopDemo();chStopDemo();clearTimeout(autoTimer);closePop();closeMenu();
+  game.mode=mode;game.tips=0;game.served=0;game.walkouts=0;game.points=0;game.idx=0;game.results=[];game.runStart=performance.now();
+  demoBtn.textContent="Quit";document.getElementById("finishBtn").textContent="Serve";
+  buildModeMenu();nextOrder();
+}
+function endGame(summary){
+  const was=game.mode;game.mode="free";game.order=null;ticket.classList.remove("open");
+  demoBtn.textContent="Demo";document.getElementById("finishBtn").textContent="Finish";
+  buildModeMenu();updateStatus();
+  if(summary&&was!=="free")showSummary(was);
+}
+function showSummary(was){
+  const n=game.results.length,avg=n?Math.round(game.results.reduce((a,r)=>a+r.q,0)/n):0;
+  let html="",title="";
+  if(was==="shift"){
+    title="Shift over";
+    let best=0;try{best=+(localStorage.getItem("lartte-best-shift-v1")||0);}catch(e){}
+    const isBest=game.tips>best;if(isBest)try{localStorage.setItem("lartte-best-shift-v1",game.tips.toFixed(2));}catch(e){}
+    html="Served "+game.served+" drinks, "+game.walkouts+" walked out.<br>Average quality "+avg+"<br>Tips $"+game.tips.toFixed(2)+(isBest?"<br><b style='color:#1e6fd9'>New best shift!</b>":"<br>Best shift $"+best.toFixed(2));
+    document.getElementById("resScore").textContent="$"+game.tips.toFixed(2);
+  }else{
+    title="Time attack done";
+    const secs=(performance.now()-game.runStart)/1000;
+    let best=0;try{best=+(localStorage.getItem("lartte-best-rush-v1")||0);}catch(e){}
+    const isBest=game.points>best;if(isBest)try{localStorage.setItem("lartte-best-rush-v1",game.points);}catch(e){}
+    html="Five drinks in "+fmtTime(secs)+".<br>Average quality "+avg+"<br>Points "+game.points+(isBest?"<br><b style='color:#1e6fd9'>New best run!</b>":"<br>Best run "+best);
+    document.getElementById("resScore").textContent=game.points+" pts";
+  }
+  document.getElementById("resTitle").textContent=title;document.getElementById("resGrade").innerHTML=html;
+  document.getElementById("resImg").src=game.results.length?game.results[game.results.length-1].thumb:"";
+  setResultButtons("again");openModal("resultModal");
+}
+function fmtTime(s){s=Math.max(0,Math.round(s));const m=Math.floor(s/60),r=s%60;return m+":"+(r<10?"0":"")+r;}
+function nextOrder(){
+  if(!gameOn())return;
+  if(game.mode==="rush"&&game.idx>=5){endGame(true);return;}
+  const o=makeOrder();game.order=o;o.start=performance.now();game.idx++;
+  const v=settingsViewFor(o);
+  if(settings.view!==v){settings.view=v;setToolbar();refreshTools();}
+  if(o.style==="hot"){if(settings.mode!=="milk"){settings.mode="milk";buildMenus();refreshTools();}settings.target=o.art||"free";buildTarget();buildGhost();buildMenus();}
+  freshCup();chReset();
+  ticket.classList.add("open");renderTicket(true);sfxDing();
+  updateStatus();
+}
+function orderSecs(){const o=game.order;return o?(performance.now()-o.start)/1000:0;}
+function renderTicket(full){
+  const o=game.order;if(!o)return;
+  const secs=orderSecs();
+  if(full){
+    ticket.classList.toggle("vip",o.vip);
+    ticket.querySelector(".who").textContent=(o.vip?"VIP · ":"")+o.who+" · "+(o.style==="hot"?"Hot":o.style==="iced"?"Iced":"Blended")+(game.mode==="rush"?" · drink "+game.idx+" of 5":"");
+    ticket.querySelector(".dn").textContent=o.name;
+  }
+  const K=madeKeys(o),done=o.req.filter(k=>K.has(k)).length;
+  const bar=ticket.querySelector(".bar i"),tm=ticket.querySelector(".tm");
+  if(game.mode==="shift"){const left=Math.max(0,o.patience-secs);bar.style.width=(left/o.patience*100)+"%";bar.style.background=left<o.patience*0.25?"#e0242f":left<o.patience*0.5?"#f6a623":"#1e6fd9";tm.textContent=fmtTime(left)+" · "+done+"/"+o.req.length;}
+  else{bar.style.width="100%";bar.style.background="#1e6fd9";tm.textContent=fmtTime((performance.now()-game.runStart)/1000)+" · "+done+"/"+o.req.length;}
+}
+ticket.onclick=()=>{
+  const o=game.order;if(!o)return;
+  const K=madeKeys(o);
+  const list=document.getElementById("orderList");list.innerHTML="";
+  o.req.forEach(k=>{const d2=document.createElement("div");d2.className="oi"+(K.has(k)?" ok":"");d2.textContent=(K.has(k)?"✓ ":"○ ")+reqLabel(k);list.appendChild(d2);});
+  if(o.art){const d2=document.createElement("div");d2.className="oi";d2.textContent="○ Pour a "+TARGETS.find(t=>t.id===o.art).name.toLowerCase()+" (the blue guide shows the shape)";list.appendChild(d2);}
+  if(o.style!=="hot"){const d2=document.createElement("div");d2.className="oi"+(chFill()>=0.7?" ok":"");d2.textContent=(chFill()>=0.7?"✓ ":"○ ")+"Fill the cup most of the way";list.appendChild(d2);}
+  document.getElementById("orderTitle").textContent=o.name;
+  document.getElementById("orderWho").textContent=(o.vip?"VIP, picky as hell. Extras and sloppy work cost double. ":"")+o.who+" ordered this.";
+  openModal("orderModal");
+};
+function gameTick(){
+  if(!gameOn()||!game.order||game.waiting)return;
+  renderTicket(false);
+  if(game.mode==="shift"&&orderSecs()>=game.order.patience){
+    game.walkouts++;sfxSad();game.waiting=true;
+    const o=game.order;
+    showToast(o.who+" got tired of waiting and left. "+(3-game.walkouts>0?"Walkouts left before the boss sends you home: "+(3-game.walkouts):""));
+    setTimeout(()=>{game.waiting=false;if(game.walkouts>=3)endGame(true);else nextOrder();},1800);
+  }
+}
+function gameServe(){
+  const o=game.order;if(!o||game.waiting)return;
+  const secs=orderSecs(),r=gradeOrder(o,secs);
+  const stars=starsFor(r.q,o.vip);
+  lastShot=grabShot();
+  const s2=document.createElement("canvas");s2.width=140;s2.height=140;const sc=s2.getContext("2d");
+  if(o.style==="hot"){sc.beginPath();sc.arc(70,70,70,0,Math.PI*2);sc.clip();sc.drawImage(cv,(cx-R)*dpr,(cy-R)*dpr,2*R*dpr,2*R*dpr,0,0,140,140);}
+  else{sc.fillStyle="#f7f3ec";sc.fillRect(0,0,140,140);sc.drawImage(cv,0,0,cv.width,cv.height,0,0,140,140);}
+  const thumb=s2.toDataURL("image/jpeg",0.75);
+  let tip=0,pts=0;
+  if(game.mode==="shift"){tip=(stars>=2?(r.q/100)*(o.vip?9:3)*(0.6+Math.max(0,o.patience-secs)/o.patience*0.6):0);game.tips+=tip;}
+  else{pts=r.q+Math.round(Math.max(0,45-secs)*1.5*(r.q/100));game.points+=pts;}
+  game.served++;game.results.push({q:r.q,thumb});
+  const quote=o.vip?(stars>=5?"Fine. That was acceptable.":stars>=4?"Hm. Almost.":pick(VIP_GRIPES)):(stars>=4?pick(HAPPY):stars>=3?pick(MEH):pick(MAD));
+  let html="<i>“"+quote+"”</i><br>";
+  html+="Quality "+r.q+" · "+fmtTime(secs)+(game.mode==="shift"?" · tip $"+tip.toFixed(2):" · +"+pts+" pts")+"<br>";
+  if(r.hit.length)html+="<span style='color:#2e8b4a'>✓ "+r.hit.map(reqLabel).join(", ")+"</span><br>";
+  if(r.miss.length)html+="<span style='color:#c8102e'>Missing: "+r.miss.map(reqLabel).join(", ")+"</span><br>";
+  if(r.extra.length)html+="<span style='color:#b8650a'>Not ordered: "+r.extra.map(reqLabel).join(", ")+"</span><br>";
+  if(r.notes.length)html+="<span style='color:#7a6a5c'>"+r.notes.join(", ")+"</span>";
+  document.getElementById("resTitle").textContent=o.name;
+  document.getElementById("resScore").textContent=starStr(stars);
+  document.getElementById("resGrade").innerHTML=html;
+  document.getElementById("resImg").src=thumb;
+  const l=loadLog();l.unshift({ts:Date.now(),target:o.style==="hot"?(o.art||"free"):"chino",mode:o.style==="hot"?"milk":"chino",score:r.q,thumb,name:(o.vip?"VIP ":"")+o.name+" for "+o.who});while(l.length>80)l.pop();saveLog(l);
+  game.order=null;ticket.classList.remove("open");
+  stars>=3?sfxDing():sfxSad();
+  setResultButtons("next");openModal("resultModal");
+}
+function setResultButtons(kind){
+  const row=document.getElementById("resBtns");row.innerHTML="";
+  const mk=(label,primary,fn)=>{const b=document.createElement("button");b.textContent=label;if(primary)b.className="primary";b.onclick=fn;row.appendChild(b);};
+  if(kind==="next"){
+    mk("End "+(game.mode==="rush"?"run":"shift"),false,()=>{closeModal("resultModal");endGame(true);});
+    mk(game.mode==="rush"&&game.idx>=5?"See results":"Next customer",true,()=>{closeModal("resultModal");nextOrder();});
+  }else if(kind==="again"){
+    mk("Free play",false,()=>{closeModal("resultModal");setResultButtons("free");});
+    mk("Play again",true,()=>{closeModal("resultModal");startGame(game.lastMode||"shift");});
+  }else{
+    mk("Keep pouring",false,()=>closeModal("resultModal"));
+    mk("Fresh cup",false,()=>{closeModal("resultModal");if(settings.view==="chino")chReset();else freshCup();updateStatus();});
+  }
+}
+let toastTimer=null;
+function showToast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("open");clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove("open"),2600);}
+function buildModeMenu(){
+  const el=document.getElementById("modeGame");el.innerHTML="";
+  let bs=0,br=0;try{bs=+(localStorage.getItem("lartte-best-shift-v1")||0);br=+(localStorage.getItem("lartte-best-rush-v1")||0);}catch(e){}
+  [["free","Free play","Pour whatever you want."],["shift","Coffee shop shift","Customers order hot, iced and blended drinks. Serve before they give up. Three walkouts and you're sent home."+(bs?" Best tips $"+bs.toFixed(2)+".":"")],["rush","Time attack","Five orders, one stopwatch. Fast and good beats slow and pretty."+(br?" Best "+br+" points.":"")]].forEach(m=>{
+    const b=document.createElement("button");b.className="opt"+(game.mode===m[0]?" on":"");
+    b.innerHTML="<b></b><br><span style='font-weight:500;font-size:12px'></span>";b.querySelector("b").textContent=m[1];b.querySelector("span").textContent=m[2];
+    b.onclick=()=>{if(m[0]==="free"){if(gameOn())endGame(false);closeMenu();}else{game.lastMode=m[0];startGame(m[0]);}};
+    el.appendChild(b);
+  });
+}
+
+/* phone sensors: tilt to pour, shake to dust or to blend */
+let lastAcc=null,lastShake=0;
+window.addEventListener("deviceorientation",e=>{
+  if(!settings.tiltPour||e.gamma==null)return;
+  const f=Math.max(0.1,Math.min(1,(Math.abs(e.gamma)-4)/38));
+  settings.flow=f;const fe=document.getElementById("flow");fe.value=Math.round(f*100);
+});
+window.addEventListener("devicemotion",e=>{
+  if(!settings.shakeDust)return;const a=e.accelerationIncludingGravity;if(!a||a.x==null)return;
+  if(lastAcc){const j=Math.abs(a.x-lastAcc.x)+Math.abs(a.y-lastAcc.y)+Math.abs(a.z-lastAcc.z);if(j>16)shakeEvent(j);}
+  lastAcc={x:a.x,y:a.y,z:a.z};
+});
+function shakeEvent(j){
+  const now=performance.now();if(now-lastShake<70)return;lastShake=now;
+  const power=Math.min(1,j/40);
+  if(settings.view==="chino"){
+    if(settings.chTool==="blend"){chBlend(settings.chBlend,0.01*power+0.004);}
+    else{const kind=GARNISHES.some(q=>q.id===settings.chTop)?settings.chTop:settings.garnish;const g=chGeo();chDust(kind,g.cx+(Math.random()-0.5)*g.topHalf);}
+  }else{
+    const gx=ptr.down?ptr.gx:C+(Math.random()-0.5)*24,gy=ptr.down?ptr.gy:C+(Math.random()-0.5)*24;
+    shake(gx,gy,power);made.garn.add(GARNISHES[curGarnish()].id);noteChange();
+  }
+  sfxShake();
+}
+function askSensorPermission(){
+  try{if(typeof DeviceMotionEvent!=="undefined"&&DeviceMotionEvent.requestPermission)DeviceMotionEvent.requestPermission().catch(()=>{});}catch(e){}
+  try{if(typeof DeviceOrientationEvent!=="undefined"&&DeviceOrientationEvent.requestPermission)DeviceOrientationEvent.requestPermission().catch(()=>{});}catch(e){}
+}
+
+/* sound: steam and pour hiss, blender roar, clinks and dings, all synthesized */
+let AC=null,master=null,noiseBuf=null,pourG=null,pourF=null,blendG=null,blendOsc=null,blendOscG=null;
+function audioInit(){
+  if(!settings.sound)return;
+  if(AC){if(AC.state==="suspended")AC.resume();return;}
+  try{
+    AC=new (window.AudioContext||window.webkitAudioContext)();master=AC.createGain();master.gain.value=0.6;master.connect(AC.destination);
+    const len=AC.sampleRate*2;noiseBuf=AC.createBuffer(1,len,AC.sampleRate);const dd=noiseBuf.getChannelData(0);for(let i=0;i<len;i++)dd[i]=Math.random()*2-1;
+    const mk=(type,freq,q)=>{const src=AC.createBufferSource();src.buffer=noiseBuf;src.loop=true;const f=AC.createBiquadFilter();f.type=type;f.frequency.value=freq;f.Q.value=q;const g=AC.createGain();g.gain.value=0;src.connect(f);f.connect(g);g.connect(master);src.start();return {f,g};};
+    const p=mk("bandpass",1600,0.9);pourG=p.g;pourF=p.f;
+    const b=mk("lowpass",700,1.2);blendG=b.g;
+    blendOsc=AC.createOscillator();blendOsc.type="sawtooth";blendOsc.frequency.value=70;blendOscG=AC.createGain();blendOscG.gain.value=0;blendOsc.connect(blendOscG);blendOscG.connect(master);blendOsc.start();
+  }catch(e){AC=null;}
+}
+function sfxFrame(pour,blend,vol){
+  if(!AC)return;const t=AC.currentTime;
+  if(!settings.sound){pour=false;blend=false;}
+  pourG.gain.setTargetAtTime(pour?(vol||0.16)*(0.4+settings.flow):0,t,0.06);
+  pourF.frequency.setTargetAtTime(1100+settings.flow*1500,t,0.1);
+  blendG.gain.setTargetAtTime(blend?0.32:0,t,0.05);blendOscG.gain.setTargetAtTime(blend?0.045:0,t,0.05);
+  if(blend)blendOsc.frequency.setTargetAtTime(62+Math.random()*18,t,0.04);
+}
+function tone(freq,dur,type,vol,delay){
+  if(!AC||!settings.sound)return;const t=AC.currentTime+(delay||0);
+  const o=AC.createOscillator(),g=AC.createGain();o.type=type||"sine";o.frequency.value=freq;
+  g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(vol||0.2,t+0.01);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g);g.connect(master);o.start(t);o.stop(t+dur+0.05);
+}
+function sfxDing(){tone(1320,0.6,"sine",0.22);tone(1760,0.9,"sine",0.16,0.12);}
+function sfxClink(){tone(2500+Math.random()*1200,0.14,"triangle",0.1);tone(3800+Math.random()*800,0.08,"sine",0.05,0.03);}
+function sfxPlop(){tone(260+Math.random()*120,0.12,"sine",0.12);}
+function sfxSad(){tone(233,0.45,"sawtooth",0.08);tone(174,0.7,"sawtooth",0.08,0.28);}
+function sfxShake(){tone(500+Math.random()*400,0.05,"square",0.04);}
+document.addEventListener("pointerdown",()=>audioInit(),true);
+
 /* view switching between the latte and the ARTchino */
 function setToolbar(){
   const defs=settings.view==="chino"?CH_TOOLS:LATTE_TOOLS;
@@ -1759,6 +2135,11 @@ document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>{
   settings.view=b.dataset.view;saveSettings();setToolbar();refreshTools();updateStatus();
 });
 setToolbar();
+[["tiltPour","tiltPour"],["shakeDust","shakeDust"],["soundOn","sound"]].forEach(([id,key])=>{
+  const el=document.getElementById(id);el.checked=!!settings[key];
+  el.onchange=()=>{settings[key]=el.checked;saveSettings();if(el.checked&&key!=="sound")askSensorPermission();if(key==="sound"){if(el.checked)audioInit();else if(AC)sfxFrame(false,false);}};
+});
+buildModeMenu();setResultButtons("free");
 window.addEventListener("resize",resize);
 resize();buildTarget();buildGhost();buildMenus();updateStatus();
 requestAnimationFrame(loop);
